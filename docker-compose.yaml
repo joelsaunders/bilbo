@@ -1,0 +1,19 @@
+version: '2'
+services:
+
+  # SQL database
+  postgres:
+    image: "postgres:9.6.0"
+    restart: "always"
+    volumes:
+      - "bilbo-data:/var/lib/postgresql/data"
+    ports:
+      - "54321:5432"
+    environment:
+      POSTGRES_USER: "testuser"
+      POSTGRES_PASSWORD: "mpassword"
+      POSTGRES_DB: "bilbo"
+    mem_limit: "8g"
+
+volumes:
+  bilbo-data:
