@@ -9,6 +9,7 @@ import io.ktor.server.engine.applicationEngineEnvironment
 import io.ktor.util.KtorExperimentalAPI
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.flywaydb.core.Flyway
 import org.jetbrains.exposed.sql.Database
 import org.jetbrains.exposed.sql.SchemaUtils.create
 import org.jetbrains.exposed.sql.insert
@@ -21,9 +22,14 @@ import org.mindrot.jbcrypt.BCrypt
 object DatabaseFactory {
 
     val appConfig = HoconApplicationConfig(ConfigFactory.load())
+    val dbUrl = appConfig.property("db.jdbcUrl").getString()
+    val dbUser = appConfig.property("db.dbUser").getString()
+    val dbPassword = appConfig.property("db.dbPassword").getString()
 
     fun init() {
         Database.connect(hikari())
+        val flyway = Flyway.configure().dataSource(dbUrl, dbUser, dbPassword).load()
+        flyway.migrate()
         transaction {
             Users.insertIgnore {
                 it[email] = appConfig.property("db.defaultUserEmail").getString()
@@ -38,9 +44,9 @@ object DatabaseFactory {
     private fun hikari(): HikariDataSource {
         val config = HikariConfig()
         config.driverClassName = "org.postgresql.Driver"
-        config.jdbcUrl = appConfig.property("db.jdbcUrl").getString()
-        config.username = appConfig.property("db.dbUser").getString()
-        config.password = appConfig.property("db.dbPassword").getString()
+        config.jdbcUrl = dbUrl
+        config.username = dbUser
+        config.password = dbPassword
         config.maximumPoolSize = 3
         config.isAutoCommit = false
         config.transactionIsolation = "TRANSACTION_REPEATABLE_READ"
