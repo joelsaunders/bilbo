@@ -1,8 +1,10 @@
 package com.bilbo
 
 import com.bilbo.model.LoginRegister
+import com.bilbo.model.userUpdate
 import com.bilbo.service.BillService
 import com.bilbo.service.DatabaseFactory
+import com.bilbo.service.MonzoApiService
 import com.bilbo.service.UserService
 import io.ktor.application.*
 import io.ktor.response.*
@@ -50,6 +52,7 @@ fun Application.module(testing: Boolean = false) {
 
     val userService = UserService()
     val billService = BillService()
+    val monzoService = MonzoApiService()
 
     routing {
         authenticate {
@@ -62,6 +65,23 @@ fun Application.module(testing: Boolean = false) {
                 val userId = principal.name.toInt()
                 val bills = billService.getBills(userId)
                 call.respond(bills)
+            }
+
+            get ("user/accounts") {
+                val principal = call.principal<UserIdPrincipal>() ?: error("No principal")
+                val userId = principal.name.toInt()
+                val monzoToken = userService.getUserById(userId)?.monzoToken ?: error("No token for this user")
+                val accounts = monzoService.listAccounts(monzoToken)
+                call.respond(accounts)
+            }
+
+            patch("user") {
+                val principal = call.principal<UserIdPrincipal>() ?: error("No principal")
+                val userId = principal.name.toInt()
+                val post = call.receive<userUpdate>()
+
+                userService.updateUser(userId, post)
+                call.respond("")
             }
         }
 

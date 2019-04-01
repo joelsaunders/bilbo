@@ -55,6 +55,9 @@ dependencies {
     compile "io.ktor:ktor-auth:$ktor_version"
     compile "io.ktor:ktor-auth-jwt:$ktor_version"
     compile 'org.flywaydb:flyway-core:5.2.4'
+    compile "io.ktor:ktor-client-json:$ktor_version"
+    compile "io.ktor:ktor-client-cio:$ktor_version"
+    compile "io.ktor:ktor-client-jackson:$ktor_version"
 }
 
 flyway {
