@@ -1,6 +1,8 @@
 package com.bilbo.service
 
 import com.bilbo.service.DatabaseFactory.appConfig
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties
+import com.fasterxml.jackson.datatype.joda.JodaModule
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO
@@ -17,10 +19,12 @@ import org.joda.time.DateTime
 import java.net.URL
 
 
+@JsonIgnoreProperties(ignoreUnknown = true)
 data class MonzoAccount(
     val id: String,
     val description: String,
-    val created: DateTime
+    val created: DateTime,
+    val type: String
 )
 
 
@@ -29,7 +33,7 @@ data class MonzoAccountList(
 )
 
 
-data class Deposit (
+data class MonzoDeposit (
     val source_account_id: String,
     val amount: Int,
     val dedupeId: String
@@ -44,7 +48,9 @@ class MonzoApiService {
 
     val httpClient = HttpClient(CIO) {
         install(JsonFeature) {
-            serializer = JacksonSerializer()
+            serializer = JacksonSerializer {
+                registerModule(JodaModule())
+            }
         }
         engine {
             maxConnectionsCount = 1000 // Maximum number of socket connections.
@@ -66,7 +72,7 @@ class MonzoApiService {
         }
     }
 
-    suspend fun depositIntoBilboPot(monzoToken: String, potId: Int, deposit: Deposit) {
+    suspend fun depositIntoBilboPot(monzoToken: String, potId: Int, deposit: MonzoDeposit) {
         return httpClient.post<Unit> {
             url(URL("${baseUrl}/pots/$potId/deposit"))
             body = TextContent(

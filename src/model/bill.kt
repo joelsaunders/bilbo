@@ -27,7 +27,6 @@ data class Bill(
 
 data class NewBill(
     val id: Int?,
-    val userId: Int,
     val name: String,
     val amount: Int,
     val dueDate: DateTime

@@ -5,14 +5,11 @@ import com.typesafe.config.ConfigFactory
 import com.zaxxer.hikari.HikariConfig
 import com.zaxxer.hikari.HikariDataSource
 import io.ktor.config.HoconApplicationConfig
-import io.ktor.server.engine.applicationEngineEnvironment
 import io.ktor.util.KtorExperimentalAPI
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.flywaydb.core.Flyway
 import org.jetbrains.exposed.sql.Database
-import org.jetbrains.exposed.sql.SchemaUtils.create
-import org.jetbrains.exposed.sql.insert
 import org.jetbrains.exposed.sql.insertIgnore
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.mindrot.jbcrypt.BCrypt
@@ -22,9 +19,9 @@ import org.mindrot.jbcrypt.BCrypt
 object DatabaseFactory {
 
     val appConfig = HoconApplicationConfig(ConfigFactory.load())
-    val dbUrl = appConfig.property("db.jdbcUrl").getString()
-    val dbUser = appConfig.property("db.dbUser").getString()
-    val dbPassword = appConfig.property("db.dbPassword").getString()
+    private val dbUrl = appConfig.property("db.jdbcUrl").getString()
+    private val dbUser = appConfig.property("db.dbUser").getString()
+    private val dbPassword = appConfig.property("db.dbPassword").getString()
 
     fun init() {
         Database.connect(hikari())
@@ -36,7 +33,6 @@ object DatabaseFactory {
                 it[password] = BCrypt.hashpw(
                     appConfig.property("db.defaultUserPassword").getString(), BCrypt.gensalt()
                 )
-
             }
         }
     }
