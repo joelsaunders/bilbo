@@ -27,12 +27,12 @@ class BillService {
      *
      * Due for deposit means that there is no deposit this month with that bill id
      */
-    suspend fun getBillsDueForDeposit(now: DateTime, userId: Int): List<Bill> = DatabaseFactory.dbQuery {
+    suspend fun getBillsDueForDeposit(now: DateTime, user: User): List<Bill> = DatabaseFactory.dbQuery {
         val billTable = Bills.alias("bills")
         val thisMonthStart = DateTime(
             now.year,
             now.monthOfYear().get(),
-            1,
+            user.potDepositDay!!,
             0,
             0
         )
@@ -41,12 +41,12 @@ class BillService {
 
         val ids = billTable.select {
             (
-                    (Bills.userId eq userId) and
-                    (notExists(
-                        Deposits.select{
-                            (Deposits.depositDate greaterEq thisMonthStart) and (Deposits.billId eq billId)
-                        }
-                    ))
+                (Bills.userId eq user.id!!) and
+                (notExists(
+                    Deposits.select{
+                        (Deposits.depositDate greaterEq thisMonthStart) and (Deposits.billId eq billId)
+                    }
+                ))
             )
         }.map { it[billId] }
 
@@ -55,13 +55,13 @@ class BillService {
         }.map { toBill(it) }
     }
 
-    suspend fun addBill(bill: NewBill, userId: Int) = DatabaseFactory.dbQuery {
-        Bills.insert {
+    suspend fun addBill(bill: NewBill, userId: Int): Int? = DatabaseFactory.dbQuery {
+        Bills.insertIgnore {
             it[Bills.userId] = userId
             it[name] = bill.name
             it[amount] = bill.amount
             it[dueDayOfMonth] = bill.dueDayOfMonth
-        }
+        } get Bills.id
     }
 
     suspend fun updateBill(bill: Bill) = DatabaseFactory.dbQuery {

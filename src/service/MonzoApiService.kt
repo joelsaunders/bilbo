@@ -9,11 +9,10 @@ import io.ktor.client.engine.cio.CIO
 import io.ktor.client.features.json.JacksonSerializer
 import io.ktor.util.KtorExperimentalAPI
 import io.ktor.client.features.json.JsonFeature
-import io.ktor.client.request.get
-import io.ktor.client.request.headers
-import io.ktor.client.request.post
-import io.ktor.client.request.url
+import io.ktor.client.request.*
+import io.ktor.client.request.forms.FormDataContent
 import io.ktor.http.ContentType
+import io.ktor.http.Parameters
 import io.ktor.http.content.TextContent
 import org.joda.time.DateTime
 import java.net.URL
@@ -33,18 +32,18 @@ data class MonzoAccountList(
 )
 
 
-data class MonzoDeposit (
+data class MonzoDeposit(
     val source_account_id: String,
-    val amount: Int,
-    val dedupeId: String
+    val amount: String,
+    val dedupe_id: String
 )
 
 
 @KtorExperimentalAPI
 class MonzoApiService {
-    val secret = appConfig.property("monzo.clientSecret").getString()
-    val clientId = appConfig.property("monzo.clientId").getString()
-    val baseUrl = appConfig.property("monzo.baseApiUrl").getString()
+    private val secret = appConfig.property("monzo.clientSecret").getString()
+    private val clientId = appConfig.property("monzo.clientId").getString()
+    private val baseUrl = appConfig.property("monzo.baseApiUrl").getString()
 
     val httpClient = HttpClient(CIO) {
         install(JsonFeature) {
@@ -65,20 +64,31 @@ class MonzoApiService {
     }
 
     suspend fun listAccounts(monzoToken: String): MonzoAccountList {
-        return httpClient.get<MonzoAccountList>("${baseUrl}/accounts") {
+        return httpClient.get("$baseUrl/accounts") {
             headers {
-                append("Authorization", "Bearer ${monzoToken}")
+                append("Authorization", "Bearer $monzoToken")
             }
         }
     }
 
-    suspend fun depositIntoBilboPot(monzoToken: String, potId: Int, deposit: MonzoDeposit) {
-        return httpClient.post<Unit> {
-            url(URL("${baseUrl}/pots/$potId/deposit"))
-            body = TextContent(
-                jacksonObjectMapper().writeValueAsString(deposit),
-                contentType = ContentType.Application.Json
+    suspend fun depositIntoBilboPot(monzoToken: String, potId: String, deposit: MonzoDeposit) {
+        val requestUrl = "$baseUrl/pots/$potId/deposit"
+        val putBody = jacksonObjectMapper().writeValueAsString(deposit)
+
+        println("posting to $requestUrl with $putBody")
+        return httpClient.put {
+            url(URL(requestUrl))
+            body = FormDataContent(
+                Parameters.build {
+                    append("source_account_id", deposit.source_account_id)
+                    append("amount", deposit.amount)
+                    append("dedupe_id", deposit.dedupe_id)
+                }
             )
+            headers {
+                append("Authorization", "Bearer $monzoToken")
+            }
         }
+        // TODO: make this add a timeline item
     }
 }

@@ -23,6 +23,7 @@ class DepositService {
         Deposits.insert {
             it[Deposits.amount] = amount
             it[Deposits.billId] = billId
+            it[Deposits.depositDate] = DateTime()
         }
     }
 

@@ -37,6 +37,7 @@ object DatabaseFactory {
         runBlocking {
             val userService = UserService()
             val billService = BillService()
+            val depositService = DepositService()
 
             transaction {
                 Users.insertIgnore {
@@ -56,17 +57,28 @@ object DatabaseFactory {
                 amount = 10,
                 dueDayOfMonth = DateTime().dayOfMonth().get()
             )
+
+            val bill2 = NewBill(
+                name = "testbill1",
+                amount = 10,
+                dueDayOfMonth = DateTime().dayOfMonth().get()
+            )
             if (user?.id != null) {
                 billService.addBill(
                     bill,
                     user.id
                 )
+
+                val paidBill = billService.addBill(
+                    bill2,
+                    user.id
+                )
+                if (paidBill != null) {
+
+                    depositService.makeDeposit(paidBill, 10)
+                }
             }
-            // todo: create a deposit and fix above ^
-
-
         }
-
     }
 
     private fun hikari(): HikariDataSource {

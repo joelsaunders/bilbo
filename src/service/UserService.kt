@@ -5,7 +5,6 @@ import com.bilbo.model.Users
 import com.bilbo.service.DatabaseFactory.dbQuery
 import io.ktor.util.KtorExperimentalAPI
 import org.jetbrains.exposed.sql.*
-import org.joda.time.DateTime
 
 
 @KtorExperimentalAPI
@@ -13,6 +12,15 @@ class UserService {
 
     suspend fun getAllUsers(): List<User> = dbQuery {
         Users.selectAll().map { toUser(it) }
+    }
+
+    suspend fun getReadyUsers(): List<User> = dbQuery {
+        Users.select {
+            Users.main_account_id.isNotNull() and
+            Users.bilbo_pot_id.isNotNull() and
+            Users.monzo_token.isNotNull() and
+            Users.pot_deposit_day.isNotNull()
+        }.mapNotNull { toUser(it) }
     }
 
     suspend fun getUser(email: String): User? = dbQuery {
@@ -29,19 +37,12 @@ class UserService {
             .singleOrNull()
     }
 
-    suspend fun getUserByPayDay(payday: DateTime): List<User> = dbQuery {
-        Users.select {
-            (Users.pot_deposit_date greater DateTime()) and
-            (Users.pot_deposit_date less DateTime().plusHours(3))
-        }.map { toUser(it) }
-    }
-
     suspend fun updateUser(id: Int, updatedUser: User) = dbQuery {
         Users.update({Users.id eq id}) {
             it[monzo_token] = updatedUser.monzoToken
             it[main_account_id] = updatedUser.mainAccountId
             it[bilbo_pot_id] = updatedUser.bilboPotId
-            it[pot_deposit_date] = updatedUser.potDepositDate
+            it[pot_deposit_day] = updatedUser.potDepositDay
         }
     }
 
@@ -53,6 +54,6 @@ class UserService {
             monzoToken = row[Users.monzo_token],
             mainAccountId = row[Users.main_account_id],
             bilboPotId = row[Users.bilbo_pot_id],
-            potDepositDate = row[Users.pot_deposit_date]
+            potDepositDay = row[Users.pot_deposit_day]
         )
 }
