@@ -1,5 +1,7 @@
 package com.bilbo.service
 
+import com.bilbo.model.Bills
+import com.bilbo.model.NewBill
 import com.bilbo.model.Users
 import com.typesafe.config.ConfigFactory
 import com.zaxxer.hikari.HikariConfig
@@ -7,11 +9,14 @@ import com.zaxxer.hikari.HikariDataSource
 import io.ktor.config.HoconApplicationConfig
 import io.ktor.util.KtorExperimentalAPI
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import org.flywaydb.core.Flyway
 import org.jetbrains.exposed.sql.Database
 import org.jetbrains.exposed.sql.insertIgnore
+import org.jetbrains.exposed.sql.select
 import org.jetbrains.exposed.sql.transactions.transaction
+import org.joda.time.DateTime
 import org.mindrot.jbcrypt.BCrypt
 
 
@@ -27,14 +32,41 @@ object DatabaseFactory {
         Database.connect(hikari())
         val flyway = Flyway.configure().dataSource(dbUrl, dbUser, dbPassword).load()
         flyway.migrate()
-        transaction {
-            Users.insertIgnore {
-                it[email] = appConfig.property("db.defaultUserEmail").getString()
-                it[password] = BCrypt.hashpw(
-                    appConfig.property("db.defaultUserPassword").getString(), BCrypt.gensalt()
+
+        // TEST DATA
+        runBlocking {
+            val userService = UserService()
+            val billService = BillService()
+
+            transaction {
+                Users.insertIgnore {
+                    it[email] = appConfig.property("db.defaultUserEmail").getString()
+                    it[password] = BCrypt.hashpw(
+                        appConfig.property("db.defaultUserPassword").getString(), BCrypt.gensalt()
+                    )
+                }
+            }
+
+
+            val user = userService.getUser(
+                email = appConfig.property("db.defaultUserEmail").getString()
+            )
+            val bill = NewBill(
+                name = "testbill",
+                amount = 10,
+                dueDayOfMonth = DateTime().dayOfMonth().get()
+            )
+            if (user?.id != null) {
+                billService.addBill(
+                    bill,
+                    user.id
                 )
             }
+            // todo: create a deposit and fix above ^
+
+
         }
+
     }
 
     private fun hikari(): HikariDataSource {

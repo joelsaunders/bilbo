@@ -10,7 +10,7 @@ object Bills: Table() {
     val userId: Column<Int> = integer("user_id") references Users.id
     val name: Column<String> = varchar("name", 50)
     val amount: Column<Int> = integer("amount")
-    val dueDate: Column<DateTime> = datetime("due_date")
+    val dueDayOfMonth: Column<Int> = integer("due_day_of_month")
 
     init {
         index(true, userId, name)
@@ -22,12 +22,11 @@ data class Bill(
     val userId: Int,
     val name: String,
     val amount: Int,
-    val dueDate: DateTime
+    val dueDayOfMonth: Int
 )
 
 data class NewBill(
-    val id: Int?,
     val name: String,
     val amount: Int,
-    val dueDate: DateTime
+    val dueDayOfMonth: Int
 )

@@ -57,7 +57,7 @@ fun Application.module(testing: Boolean = false) {
 
     routing {
         authenticate {
-            get ("/users" ) {
+            get ("/user" ) {
                 call.respond(userService.getAllUsers())
             }
 
@@ -65,6 +65,13 @@ fun Application.module(testing: Boolean = false) {
                 val principal = call.principal<UserIdPrincipal>() ?: error("No principal")
                 val userId = principal.name.toInt()
                 val bills = billService.getBills(userId)
+                call.respond(bills)
+            }
+
+            get ("/bills/due-for-deposit") {
+                val principal = call.principal<UserIdPrincipal>() ?: error("No principal")
+                val userId = principal.name.toInt()
+                val bills = billService.getBillsDueForDeposit(DateTime(), userId)
                 call.respond(bills)
             }
 
