@@ -20,7 +20,6 @@ suspend fun doDeposit(user: User) {
     if (dueDeposits.count() == 0) return
 
     val totalAmount = dueDeposits.sumBy { it.amount }
-    val billNames = dueDeposits.map { it.name }
 
     val monzoDeposit = MonzoDeposit(
         user.mainAccountId!!,
@@ -29,6 +28,12 @@ suspend fun doDeposit(user: User) {
     )
     println("Depositing $totalAmount into ${user.email}'s pot")
     monzoApi.depositIntoBilboPot(user.monzoToken!!, user.bilboPotId!!, monzoDeposit)
+    monzoApi.postFeedItem(
+        user.monzoToken,
+        user.mainAccountId,
+        "Bilbo's pot increased",
+        "\uE22F ${dueDeposits.count()} bills added"
+    )
 
     dueDeposits.map { depositService.makeDeposit(it.id, it.amount) }
 }
@@ -46,8 +51,6 @@ fun makeDeposits() {
             }
         }
     }
-
-
 }
 
 

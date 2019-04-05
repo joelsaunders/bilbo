@@ -11,9 +11,8 @@ import io.ktor.util.KtorExperimentalAPI
 import io.ktor.client.features.json.JsonFeature
 import io.ktor.client.request.*
 import io.ktor.client.request.forms.FormDataContent
-import io.ktor.http.ContentType
+import io.ktor.client.response.HttpResponse
 import io.ktor.http.Parameters
-import io.ktor.http.content.TextContent
 import org.joda.time.DateTime
 import java.net.URL
 
@@ -71,12 +70,33 @@ class MonzoApiService {
         }
     }
 
+    suspend fun postFeedItem(monzoToken: String, accountId: String, title: String, postBody: String) {
+        val requestUrl = "$baseUrl/feed"
+
+        val response = httpClient.post<HttpResponse> {
+            url(URL(requestUrl))
+            body = FormDataContent(
+                Parameters.build {
+                    append("account_id", accountId)
+                    append("type", "basic")
+//                    append("params", mapOf("title" to title, "body" to postBody, ""))
+                    append("params[title]", title)
+                    append("params[body]", postBody)
+                    append("params[image_url]", "https://media.ntslive.co.uk/crop/430x430/7be5a6a5-dd54-4311-8428-f9cb8d661414_1530144000.png")
+                }
+            )
+            headers {
+                append("Authorization", "Bearer $monzoToken")
+            }
+        }
+    }
+
     suspend fun depositIntoBilboPot(monzoToken: String, potId: String, deposit: MonzoDeposit) {
         val requestUrl = "$baseUrl/pots/$potId/deposit"
         val putBody = jacksonObjectMapper().writeValueAsString(deposit)
 
         println("posting to $requestUrl with $putBody")
-        return httpClient.put {
+        val response = httpClient.put<HttpResponse> {
             url(URL(requestUrl))
             body = FormDataContent(
                 Parameters.build {
@@ -89,6 +109,5 @@ class MonzoApiService {
                 append("Authorization", "Bearer $monzoToken")
             }
         }
-        // TODO: make this add a timeline item
     }
 }

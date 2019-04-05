@@ -50,9 +50,11 @@ class BillService {
             )
         }.map { it[billId] }
 
-        Bills.select {
-            (Bills.id inList ids)
-        }.map { toBill(it) }
+        if (ids.isNotEmpty()) {
+            Bills.select {
+                (Bills.id inList ids)
+            }.map { toBill(it) }
+        } else listOf()
     }
 
     suspend fun addBill(bill: NewBill, userId: Int): Int? = DatabaseFactory.dbQuery {
