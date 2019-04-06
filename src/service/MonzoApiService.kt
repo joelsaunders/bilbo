@@ -1,6 +1,7 @@
 package com.bilbo.service
 
 import com.bilbo.model.User
+import com.bilbo.model.Withdrawal
 import com.bilbo.service.DatabaseFactory.appConfig
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 import com.fasterxml.jackson.datatype.joda.JodaModule
@@ -13,10 +14,12 @@ import io.ktor.client.features.json.JsonFeature
 import io.ktor.client.request.*
 import io.ktor.client.request.forms.FormDataContent
 import io.ktor.client.response.HttpResponse
+import io.ktor.client.response.readText
 import io.ktor.http.Parameters
 import io.ktor.util.KtorExperimentalAPI
 import org.joda.time.DateTime
 import java.net.URL
+import java.util.*
 
 
 @JsonIgnoreProperties(ignoreUnknown = true)
@@ -62,6 +65,7 @@ class MonzoApiService {
                 registerModule(JodaModule())
             }
         }
+        expectSuccess = true
         engine {
             endpoint.apply {
                 connectTimeout = 5000 // Number of milliseconds to wait trying to connect to the server.
@@ -96,8 +100,9 @@ class MonzoApiService {
             if (e.statusCode.value == 401) {
                 refreshToken(user)
                 val refreshedUser = userService.getUserById(user.id!!)
-                refreshTokenWrapper(refreshedUser!!, request)
-            } else throw e
+                return refreshTokenWrapper(refreshedUser!!, request)
+            }
+            throw e
         }
     }
 
@@ -133,7 +138,7 @@ class MonzoApiService {
     suspend fun postFeedItem(user: User, title: String, postBody: String) {
         val requestUrl = "$baseUrl/feed"
 
-        val response = refreshTokenWrapper(user) {
+        refreshTokenWrapper(user) {
             httpClient.post<HttpResponse> {
                 url(URL(requestUrl))
                 body = FormDataContent(
@@ -155,13 +160,33 @@ class MonzoApiService {
         }
     }
 
+    suspend fun withdrawFromBilboPot(user: User, amount: Int) {
+        val requestUrl = "$baseUrl/pots/${user.bilboPotId}/withdraw"
+
+        println("posting withdrawal to $requestUrl with  amount: $amount")
+        refreshTokenWrapper(user) {
+            httpClient.put<Unit> {
+                url(URL(requestUrl))
+                body = FormDataContent(
+                    Parameters.build {
+                        append("destination_account_id", user.mainAccountId!!)
+                        append("amount", amount.toString())
+                        append("dedupe_id", UUID.randomUUID().toString())
+                    }
+                )
+                headers {
+                    append("Authorization", "Bearer ${user.monzoToken}")
+                }
+            }
+        }
+    }
+
     suspend fun depositIntoBilboPot(user: User, deposit: MonzoDeposit) {
         val requestUrl = "$baseUrl/pots/${user.bilboPotId}/deposit"
-        val putBody = jacksonObjectMapper().writeValueAsString(deposit)
 
-        println("posting to $requestUrl with $putBody")
-        val response = refreshTokenWrapper(user) {
-            httpClient.put<HttpResponse> {
+        println("posting deposit to $requestUrl with $deposit")
+        refreshTokenWrapper(user) {
+            httpClient.put<Unit> {
                 url(URL(requestUrl))
                 body = FormDataContent(
                     Parameters.build {

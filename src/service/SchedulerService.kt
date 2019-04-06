@@ -31,10 +31,31 @@ suspend fun doDeposit(user: User) {
     monzoApi.postFeedItem(
         user,
         "Bilbo's pot increased",
-        "\uE22F ${dueDeposits.count()} bills added"
+        "\uD83D\uDC47 ${dueDeposits.count()} bills added"
     )
-
     dueDeposits.map { depositService.makeDeposit(it.id, it.amount) }
+}
+
+@KtorExperimentalAPI
+suspend fun doWithdraw(user: User) {
+    val billService = BillService()
+    val withdrawalService = WithdrawalService()
+    val monzoApi = MonzoApiService()
+
+    val dueWithdrawals = billService.getBillsDueForWithdrawal(DateTime(), user)
+
+    if (dueWithdrawals.count() == 0) return
+
+    val totalAmount = dueWithdrawals.sumBy { it.amount }
+
+    println("Withdrawing ${dueWithdrawals.count()} bills")
+    monzoApi.withdrawFromBilboPot(user, totalAmount)
+    monzoApi.postFeedItem(
+        user,
+        "Bilbo's pot decreased",
+        "\uD83D\uDC47 ${dueWithdrawals.count()} bills due today"
+    )
+    dueWithdrawals.map { withdrawalService.makeWithdrawal(it.id, true) }
 }
 
 @KtorExperimentalAPI
@@ -47,6 +68,9 @@ fun makeDeposits() {
         for (user in users) {
             GlobalScope.launch {
                 doDeposit(user)
+            }
+            GlobalScope.launch {
+                doWithdraw(user)
             }
         }
     }

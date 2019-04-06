@@ -4,6 +4,7 @@ import com.bilbo.model.*
 import io.ktor.util.KtorExperimentalAPI
 import org.jetbrains.exposed.sql.*
 import org.joda.time.DateTime
+import kotlin.math.absoluteValue
 
 @KtorExperimentalAPI
 class BillService {
@@ -14,13 +15,48 @@ class BillService {
         }.map { toBill(it) }
     }
 
-//    suspend fun getDueBills(): List<Bill> = DatabaseFactory.dbQuery {
-//        Bills.select {
-//            (Bills.dueDate greater DateTime()) and
-//            (Bills.dueDate less DateTime().plusHours(3))
-//            // and bill not yet withdrawn
-//        }.map { toBill(it) }
-//    }
+    /**
+     * Fetch all bills due for withdrawal
+     *
+     * Due for withdrawal means that the bill due day is today and there is no
+     * withdrawal for that bill this month.
+     *
+     * TODO: Also the deposit for this month must have been made.
+     */
+    suspend fun getBillsDueForWithdrawal(now: DateTime, user: User): List<Bill> = DatabaseFactory.dbQuery {
+        val billTable = Bills.alias("bills")
+        val thisMonthStart = DateTime(
+            now.year,
+            now.monthOfYear().get(),
+            user.potDepositDay!!,
+            0,
+            0
+        )
+
+        val billIdCol = billTable[Bills.id]
+
+        val ids = billTable.select {
+            (
+                (Bills.dueDayOfMonth eq now.dayOfMonth.absoluteValue) and
+                (Bills.userId eq user.id!!) and
+                    (notExists(
+                        Withdrawals.select{
+                            (
+                                (Withdrawals.withdrawalDate greaterEq thisMonthStart) and
+                                (Withdrawals.billId eq billIdCol)
+
+                            )
+                        }
+                    ))
+                )
+        }.map { it[billIdCol] }
+
+        if (ids.isNotEmpty()) {
+            Bills.select {
+                (Bills.id inList ids)
+            }.map { toBill(it) }
+        } else listOf()
+    }
 
     /**
      * Fetch all bills due for deposit
@@ -44,7 +80,10 @@ class BillService {
                 (Bills.userId eq user.id!!) and
                 (notExists(
                     Deposits.select{
-                        (Deposits.depositDate greaterEq thisMonthStart) and (Deposits.billId eq billId)
+                        (
+                            (Deposits.depositDate greaterEq thisMonthStart) and
+                            (Deposits.billId eq billId)
+                        )
                     }
                 ))
             )

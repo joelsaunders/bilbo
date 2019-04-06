@@ -2,7 +2,6 @@ package com.bilbo.model
 
 import org.jetbrains.exposed.sql.Column
 import org.jetbrains.exposed.sql.Table
-import org.joda.time.DateTime
 
 
 object Bills: Table() {
