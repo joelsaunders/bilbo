@@ -18,18 +18,20 @@ import io.ktor.features.ContentNegotiation
 import io.ktor.jackson.jackson
 import io.ktor.request.receive
 import io.ktor.response.respond
-import io.ktor.routing.get
-import io.ktor.routing.patch
-import io.ktor.routing.post
-import io.ktor.routing.routing
+import io.ktor.routing.*
 import io.ktor.util.KtorExperimentalAPI
 import org.joda.time.DateTime
 import org.mindrot.jbcrypt.BCrypt
-import service.SimpleJWT
+import SimpleJWT
+import io.ktor.application.ApplicationCall
 
 
 fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
 
+fun extractUserId(call: ApplicationCall): Int {
+    val principal = call.principal<UserIdPrincipal>() ?: error("No principal")
+    return principal.name.toInt()
+}
 
 @KtorExperimentalAPI
 @Suppress("unused") // Referenced in application.conf
@@ -59,66 +61,8 @@ fun Application.module(testing: Boolean = false) {
     }
 
     routing {
-        authenticate {
-            get ("/user" ) {
-                call.respond(userService.getAllUsers())
-            }
-
-            get ("/bills") {
-                val principal = call.principal<UserIdPrincipal>() ?: error("No principal")
-                val userId = principal.name.toInt()
-                val bills = billService.getBills(userId)
-                call.respond(bills)
-            }
-
-            get ("/bills/due-for-deposit") {
-                val principal = call.principal<UserIdPrincipal>() ?: error("No principal")
-                val userId = principal.name.toInt()
-                val user = userService.getUserById(userId)!!
-                val bills = billService.getBillsDueForDeposit(DateTime(), user)
-                call.respond(bills)
-            }
-
-            post ("/bills") {
-                val principal = call.principal<UserIdPrincipal>() ?: error("No principal")
-                val userId = principal.name.toInt()
-                val post = call.receive<NewBill>()
-
-                billService.addBill(post, userId)
-                call.respond("")
-            }
-
-            get ("user/accounts") {
-                val principal = call.principal<UserIdPrincipal>() ?: error("No principal")
-                val userId = principal.name.toInt()
-                val user = userService.getUserById(userId)?: error("No user found")
-                val accounts = monzoService.listAccounts(user)
-                call.respond(accounts)
-            }
-
-            patch("user") {
-                val principal = call.principal<UserIdPrincipal>() ?: error("No principal")
-                val userId = principal.name.toInt()
-                val post = call.receive<User>()
-
-                userService.updateUser(userId, post)
-                call.respond("")
-            }
-
-            /**
-             * User must first go to:
-             * https://auth.monzo.com/?client_id=$client_id&redirect_uri=$redirect_uri&response_type=code&state=$state_token
-             * get the access code and then come to this endpoint with the access code
-             */
-            get("user/monzo-login") {
-                val code: String = call.request.queryParameters["code"] ?: error("code is required")
-                val principal = call.principal<UserIdPrincipal>() ?: error("No principal")
-                val userId = principal.name.toInt()
-                val user = userService.getUserById(userId)?: error("No user found")
-                monzoService.oAuthLogin(code, user)
-                call.respond("login successful")
-            }
-        }
+        this@routing.billRoutes(userService, billService)
+        this@routing.userRoutes(userService, monzoService)
 
         post("/login") {
             val post = call.receive<LoginRegister>()
@@ -130,7 +74,79 @@ fun Application.module(testing: Boolean = false) {
 
             call.respond(mapOf("token" to simpleJwt.sign(user.id.toString())))
         }
-
     }
 }
 
+@KtorExperimentalAPI
+fun Routing.billRoutes(userService: UserService, billService: BillService) {
+    authenticate {
+        get("/bills") {
+            val userId = extractUserId(call)
+            val bills = billService.getBills(userId)
+            call.respond(bills)
+        }
+
+        post("/bills") {
+            val userId = extractUserId(call)
+            val post = call.receive<NewBill>()
+            val bill = billService.addBill(post, userId)?: error("bill could not be created")
+            call.respond(bill)
+        }
+
+        get("/bills/due-for-deposit") {
+            val userId = extractUserId(call)
+            val user = userService.getUserById(userId)?: error("user with id $userId could not be found")
+            val bills = billService.getBillsDueForDeposit(DateTime(), user)
+            call.respond(bills)
+        }
+    }
+}
+
+@KtorExperimentalAPI
+fun Routing.userRoutes(userService: UserService, monzoService: MonzoApiService) {
+    authenticate {
+        get("/user/accounts") {
+            val userId = extractUserId(call)
+            val user = userService.getUserById(userId)?: error("user with id $userId could not be found")
+            val accounts = monzoService.listAccounts(user)
+            call.respond(accounts)
+        }
+
+        get("/user/pots") {
+            val userId = extractUserId(call)
+            val user = userService.getUserById(userId)?: error("user with id $userId could not be found")
+            val pots = monzoService.listPots(user)
+            call.respond(pots)
+        }
+
+        get("/user" ) {
+            call.respond(userService.getAllUsers())
+        }
+
+        put("/user") {
+            val userId = extractUserId(call)
+            val post = call.receive<User>()
+            val user = userService.updateUser(userId, post)?: error("user could not be updated")
+            call.respond(user)
+        }
+
+        post("/user") {
+            val post = call.receive<User>()
+            val user = userService.createUser(post)?: error("user could not be created")
+            call.respond(user)
+        }
+
+        /**
+         * User must first go to:
+         * https://auth.monzo.com/?client_id=$client_id&redirect_uri=$redirect_uri&response_type=code&state=$state_token
+         * get the access code and then come to this endpoint with the access code
+         */
+        get("user/monzo-login") {
+            val userId = extractUserId(call)
+            val code: String = call.request.queryParameters["code"] ?: error("code is required")
+            val user = userService.getUserById(userId)?: error("user with id $userId could not be found")
+            monzoService.oAuthLogin(code, user)
+            call.respond("monzo login successful")
+        }
+    }
+}

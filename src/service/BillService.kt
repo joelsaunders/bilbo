@@ -9,6 +9,13 @@ import kotlin.math.absoluteValue
 @KtorExperimentalAPI
 class BillService {
 
+    private fun getBillById(id: Int): Bill? {
+        return Bills.select {
+            (Bills.id eq id)
+        }.mapNotNull { toBill(it) }
+            .singleOrNull()
+    }
+
     suspend fun getBills(userId: Int): List<Bill> = DatabaseFactory.dbQuery {
         Bills.select {
             (Bills.userId eq userId)
@@ -96,13 +103,17 @@ class BillService {
         } else listOf()
     }
 
-    suspend fun addBill(bill: NewBill, userId: Int): Int? = DatabaseFactory.dbQuery {
-        Bills.insertIgnore {
+    suspend fun addBill(bill: NewBill, userId: Int): Bill? = DatabaseFactory.dbQuery {
+        val billId = Bills.insert {
             it[Bills.userId] = userId
             it[name] = bill.name
             it[amount] = bill.amount
             it[dueDayOfMonth] = bill.dueDayOfMonth
         } get Bills.id
+
+        if (billId != null) {
+            getBillById(billId)
+        } else null
     }
 
     suspend fun updateBill(bill: Bill) = DatabaseFactory.dbQuery {

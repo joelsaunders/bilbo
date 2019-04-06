@@ -34,51 +34,51 @@ object DatabaseFactory {
         flyway.migrate()
 
         // TEST DATA
-        runBlocking {
-            val userService = UserService()
-            val billService = BillService()
-            val depositService = DepositService()
-
-            transaction {
-                Users.insertIgnore {
-                    it[email] = appConfig.property("db.defaultUserEmail").getString()
-                    it[password] = BCrypt.hashpw(
-                        appConfig.property("db.defaultUserPassword").getString(), BCrypt.gensalt()
-                    )
-                }
-            }
-
-
-            val user = userService.getUser(
-                email = appConfig.property("db.defaultUserEmail").getString()
-            )
-            val bill = NewBill(
-                name = "testbill",
-                amount = 10,
-                dueDayOfMonth = DateTime().dayOfMonth().get()
-            )
-
-            val bill2 = NewBill(
-                name = "testbill1",
-                amount = 10,
-                dueDayOfMonth = DateTime().dayOfMonth().get()
-            )
-            if (user?.id != null) {
-                billService.addBill(
-                    bill,
-                    user.id
-                )
-
-                val paidBill = billService.addBill(
-                    bill2,
-                    user.id
-                )
-                if (paidBill != null) {
-
-                    depositService.makeDeposit(paidBill, 10)
-                }
-            }
-        }
+//        runBlocking {
+//            val userService = UserService()
+//            val billService = BillService()
+//            val depositService = DepositService()
+//
+//            transaction {
+//                Users.insertIgnore {
+//                    it[email] = appConfig.property("db.defaultUserEmail").getString()
+//                    it[password] = BCrypt.hashpw(
+//                        appConfig.property("db.defaultUserPassword").getString(), BCrypt.gensalt()
+//                    )
+//                }
+//            }
+//
+//
+//            val user = userService.getUser(
+//                email = appConfig.property("db.defaultUserEmail").getString()
+//            )
+//            val bill = NewBill(
+//                name = "testbill",
+//                amount = 10,
+//                dueDayOfMonth = DateTime().dayOfMonth().get()
+//            )
+//
+//            val bill2 = NewBill(
+//                name = "testbill1",
+//                amount = 10,
+//                dueDayOfMonth = DateTime().dayOfMonth().get()
+//            )
+//            if (user?.id != null) {
+//                billService.addBill(
+//                    bill,
+//                    user.id
+//                )
+//
+//                val paidBill = billService.addBill(
+//                    bill2,
+//                    user.id
+//                )
+//                if (paidBill != null) {
+//
+//                    depositService.makeDeposit(paidBill, 10)
+//                }
+//            }
+//        }
     }
 
     private fun hikari(): HikariDataSource {

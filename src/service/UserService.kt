@@ -5,6 +5,7 @@ import com.bilbo.model.Users
 import com.bilbo.service.DatabaseFactory.dbQuery
 import io.ktor.util.KtorExperimentalAPI
 import org.jetbrains.exposed.sql.*
+import org.mindrot.jbcrypt.BCrypt
 
 
 @KtorExperimentalAPI
@@ -31,14 +32,18 @@ class UserService {
             .singleOrNull()
     }
 
-    suspend fun getUserById(id: Int): User? = dbQuery {
-        Users.select {
+    private fun _getUserById(id: Int): User? {
+        return Users.select {
             (Users.id eq id)
         }.mapNotNull { toUser(it) }
             .singleOrNull()
     }
 
-    suspend fun updateUser(id: Int, updatedUser: User) = dbQuery {
+    suspend fun getUserById(id: Int): User? = dbQuery {
+        _getUserById(id)
+    }
+
+    suspend fun updateUser(id: Int, updatedUser: User): User? = dbQuery {
         Users.update({Users.id eq id}) {
             it[monzo_token] = updatedUser.monzoToken
             it[monzo_refresh_token] = updatedUser.monzoRefreshToken
@@ -46,6 +51,24 @@ class UserService {
             it[bilbo_pot_id] = updatedUser.bilboPotId
             it[pot_deposit_day] = updatedUser.potDepositDay
         }
+        _getUserById(id)
+    }
+
+    suspend fun createUser(user: User): User? = dbQuery {
+        val userId = Users.insert {
+            it[email] = user.email
+            it[password] = BCrypt.hashpw(
+                user.password, BCrypt.gensalt()
+            )
+            it[monzo_token] = user.monzoToken
+            it[monzo_refresh_token] = user.monzoRefreshToken
+            it[main_account_id] = user.mainAccountId
+            it[bilbo_pot_id] = user.bilboPotId
+            it[pot_deposit_day] = user.potDepositDay
+        } get Users.id
+        if (userId != null) {
+            _getUserById(userId)
+        } else null
     }
 
     private fun toUser(row: ResultRow): User =

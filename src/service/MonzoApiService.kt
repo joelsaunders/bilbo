@@ -1,11 +1,9 @@
 package com.bilbo.service
 
 import com.bilbo.model.User
-import com.bilbo.model.Withdrawal
 import com.bilbo.service.DatabaseFactory.appConfig
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 import com.fasterxml.jackson.datatype.joda.JodaModule
-import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO
 import io.ktor.client.features.BadResponseStatusException
@@ -13,28 +11,36 @@ import io.ktor.client.features.json.JacksonSerializer
 import io.ktor.client.features.json.JsonFeature
 import io.ktor.client.request.*
 import io.ktor.client.request.forms.FormDataContent
-import io.ktor.client.response.HttpResponse
-import io.ktor.client.response.readText
 import io.ktor.http.Parameters
 import io.ktor.util.KtorExperimentalAPI
-import org.joda.time.DateTime
+import mu.KotlinLogging
 import java.net.URL
 import java.util.*
+
+
+private val logger = KotlinLogging.logger {}
 
 
 @JsonIgnoreProperties(ignoreUnknown = true)
 data class MonzoAccount(
     val id: String,
     val description: String,
-    val created: DateTime,
     val type: String
 )
-
 
 data class MonzoAccountList(
     val accounts: List<MonzoAccount>
 )
 
+@JsonIgnoreProperties(ignoreUnknown = true)
+data class MonzoPot(
+    val id: String,
+    val name: String
+)
+
+data class MonzoPotList(
+    val pots: List<MonzoPot>
+)
 
 data class MonzoDeposit(
     val source_account_id: String,
@@ -135,11 +141,21 @@ class MonzoApiService {
         }
     }
 
+    suspend fun listPots(user: User): MonzoPotList {
+        return refreshTokenWrapper(user){
+            httpClient.get<MonzoPotList>("$baseUrl/pots") {
+                headers {
+                    append("Authorization", "Bearer ${user.monzoToken}")
+                }
+            }
+        }
+    }
+
     suspend fun postFeedItem(user: User, title: String, postBody: String) {
         val requestUrl = "$baseUrl/feed"
 
         refreshTokenWrapper(user) {
-            httpClient.post<HttpResponse> {
+            httpClient.post<Unit> {
                 url(URL(requestUrl))
                 body = FormDataContent(
                     Parameters.build {
@@ -163,7 +179,7 @@ class MonzoApiService {
     suspend fun withdrawFromBilboPot(user: User, amount: Int) {
         val requestUrl = "$baseUrl/pots/${user.bilboPotId}/withdraw"
 
-        println("posting withdrawal to $requestUrl with  amount: $amount")
+        logger.debug { "posting withdrawal to $requestUrl with  amount: $amount" }
         refreshTokenWrapper(user) {
             httpClient.put<Unit> {
                 url(URL(requestUrl))
@@ -184,7 +200,7 @@ class MonzoApiService {
     suspend fun depositIntoBilboPot(user: User, deposit: MonzoDeposit) {
         val requestUrl = "$baseUrl/pots/${user.bilboPotId}/deposit"
 
-        println("posting deposit to $requestUrl with $deposit")
+        logger.debug { "posting deposit to $requestUrl with $deposit" }
         refreshTokenWrapper(user) {
             httpClient.put<Unit> {
                 url(URL(requestUrl))

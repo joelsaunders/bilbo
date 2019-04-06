@@ -4,9 +4,13 @@ import com.bilbo.model.User
 import io.ktor.util.KtorExperimentalAPI
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
+import mu.KotlinLogging
 import org.joda.time.DateTime
 import java.util.*
 import kotlin.concurrent.fixedRateTimer
+
+
+private val logger = KotlinLogging.logger {}
 
 
 @KtorExperimentalAPI
@@ -26,7 +30,7 @@ suspend fun doDeposit(user: User) {
         totalAmount.toString(),
         UUID.randomUUID().toString()
     )
-    println("Depositing $totalAmount into ${user.email}'s pot")
+    logger.debug { "Depositing $totalAmount into ${user.email}'s pot" }
     monzoApi.depositIntoBilboPot(user, monzoDeposit)
     monzoApi.postFeedItem(
         user,
@@ -48,7 +52,7 @@ suspend fun doWithdraw(user: User) {
 
     val totalAmount = dueWithdrawals.sumBy { it.amount }
 
-    println("Withdrawing ${dueWithdrawals.count()} bills")
+    logger.debug { "Withdrawing ${dueWithdrawals.count()} bills" }
     monzoApi.withdrawFromBilboPot(user, totalAmount)
     monzoApi.postFeedItem(
         user,
@@ -64,6 +68,7 @@ fun makeDeposits() {
 
     GlobalScope.launch {
         val users = userService.getReadyUsers()
+        logger.debug { "${users.count()} users found" }
 
         for (user in users) {
             GlobalScope.launch {

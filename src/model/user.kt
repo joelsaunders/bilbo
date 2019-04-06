@@ -1,10 +1,7 @@
 package com.bilbo.model
 
-import com.fasterxml.jackson.annotation.JsonFormat
-import com.fasterxml.jackson.annotation.JsonProperty
 import org.jetbrains.exposed.sql.Column
 import org.jetbrains.exposed.sql.Table
-import org.joda.time.DateTime
 
 
 object Users: Table() {
