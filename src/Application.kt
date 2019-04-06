@@ -91,8 +91,8 @@ fun Application.module(testing: Boolean = false) {
             get ("user/accounts") {
                 val principal = call.principal<UserIdPrincipal>() ?: error("No principal")
                 val userId = principal.name.toInt()
-                val monzoToken = userService.getUserById(userId)?.monzoToken ?: error("No token for this user")
-                val accounts = monzoService.listAccounts(monzoToken)
+                val user = userService.getUserById(userId)?: error("No user found")
+                val accounts = monzoService.listAccounts(user)
                 call.respond(accounts)
             }
 
@@ -103,6 +103,20 @@ fun Application.module(testing: Boolean = false) {
 
                 userService.updateUser(userId, post)
                 call.respond("")
+            }
+
+            /**
+             * User must first go to:
+             * https://auth.monzo.com/?client_id=$client_id&redirect_uri=$redirect_uri&response_type=code&state=$state_token
+             * get the access code and then come to this endpoint with the access code
+             */
+            get("user/monzo-login") {
+                val code: String = call.request.queryParameters["code"] ?: error("code is required")
+                val principal = call.principal<UserIdPrincipal>() ?: error("No principal")
+                val userId = principal.name.toInt()
+                val user = userService.getUserById(userId)?: error("No user found")
+                monzoService.oAuthLogin(code, user)
+                call.respond("login successful")
             }
         }
 

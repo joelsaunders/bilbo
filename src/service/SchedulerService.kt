@@ -27,10 +27,9 @@ suspend fun doDeposit(user: User) {
         UUID.randomUUID().toString()
     )
     println("Depositing $totalAmount into ${user.email}'s pot")
-    monzoApi.depositIntoBilboPot(user.monzoToken!!, user.bilboPotId!!, monzoDeposit)
+    monzoApi.depositIntoBilboPot(user, monzoDeposit)
     monzoApi.postFeedItem(
-        user.monzoToken,
-        user.mainAccountId,
+        user,
         "Bilbo's pot increased",
         "\uE22F ${dueDeposits.count()} bills added"
     )
@@ -59,7 +58,7 @@ class SchedulerService {
 
     @KtorExperimentalAPI
     fun init() {
-        timer = fixedRateTimer("task_scheduler", period = 10000.toLong()) {
+        timer = fixedRateTimer("task_scheduler", period = 1000*60.toLong()) {
             makeDeposits()
         }
     }

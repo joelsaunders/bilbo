@@ -19,7 +19,8 @@ class UserService {
             Users.main_account_id.isNotNull() and
             Users.bilbo_pot_id.isNotNull() and
             Users.monzo_token.isNotNull() and
-            Users.pot_deposit_day.isNotNull()
+            Users.pot_deposit_day.isNotNull() and
+            Users.monzo_refresh_token.isNotNull()
         }.mapNotNull { toUser(it) }
     }
 
@@ -40,6 +41,7 @@ class UserService {
     suspend fun updateUser(id: Int, updatedUser: User) = dbQuery {
         Users.update({Users.id eq id}) {
             it[monzo_token] = updatedUser.monzoToken
+            it[monzo_refresh_token] = updatedUser.monzoRefreshToken
             it[main_account_id] = updatedUser.mainAccountId
             it[bilbo_pot_id] = updatedUser.bilboPotId
             it[pot_deposit_day] = updatedUser.potDepositDay
@@ -52,6 +54,7 @@ class UserService {
             email = row[Users.email],
             password = row[Users.password],
             monzoToken = row[Users.monzo_token],
+            monzoRefreshToken = row[Users.monzo_refresh_token],
             mainAccountId = row[Users.main_account_id],
             bilboPotId = row[Users.bilbo_pot_id],
             potDepositDay = row[Users.pot_deposit_day]
