@@ -14,5 +14,4 @@ open class SimpleJWT(secret: String) {
                                         .sign(algorithm)
 
     private fun getExpiration() = Date(System.currentTimeMillis() + validityInMs)
-
 }

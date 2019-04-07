@@ -4,6 +4,8 @@ buildscript {
     ext.exposed_version = '0.12.1'
     repositories {
         jcenter()
+        maven { url 'https://kotlin.bintray.com/ktor' }
+        maven { url "https://kotlin.bintray.com/kotlinx" }
     }
     
     dependencies {
@@ -26,7 +28,7 @@ apply plugin: 'com.github.johnrengelman.shadow'
 
 
 group 'bilbo'
-version '0.0.1'
+version '0.0.2'
 
 sourceSets {
     main.kotlin.srcDirs = main.java.srcDirs = ['src']
@@ -39,6 +41,7 @@ repositories {
     mavenLocal()
     jcenter()
     maven { url 'https://kotlin.bintray.com/ktor' }
+    maven { url "https://kotlin.bintray.com/kotlinx" }
 }
 
 dependencies {
