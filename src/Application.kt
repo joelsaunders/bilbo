@@ -148,5 +148,12 @@ fun Routing.userRoutes(userService: UserService, monzoService: MonzoApiService) 
             monzoService.oAuthLogin(code, user)
             call.respond("monzo login successful")
         }
+
+        get("user/monzo-refresh") {
+            val userId = extractUserId(call)
+            val user = userService.getUserById(userId)?: error("user with id $userId could not be found")
+            val updatedUser = monzoService.refreshToken(user)
+            call.respond(updatedUser)
+        }
     }
 }
