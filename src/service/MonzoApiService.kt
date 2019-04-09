@@ -101,42 +101,44 @@ class MonzoApiService {
         userService.updateUser(updatedUser.id!!, updatedUser)
     }
 
-    private suspend fun <T>refreshTokenWrapper(user: User, counter: Int = 0, request: suspend (user: User) -> T): T {
+    private suspend fun <T>refreshTokenWrapper(user: User, request: suspend (user: User) -> T): T {
         return try {
             request(user)
         } catch (e: BadResponseStatusException) {
             if (e.statusCode.value == 401) {
-                if (counter > 2) {
-                    val updatedUser = user.copy(
-                        monzoToken = null
-                    )
-                    userService.updateUser(updatedUser.id!!, updatedUser)
-                    throw e
-                }
                 refreshToken(user)
                 val refreshedUser = userService.getUserById(user.id!!)
-                return refreshTokenWrapper(refreshedUser!!, counter + 1, request)
+                return refreshTokenWrapper(refreshedUser!!, request)
             } else throw e
         }
     }
 
     suspend fun refreshToken(user: User) {
-        val tokenRefresh = httpClient.post<TokenRefresh>("$baseUrl/oauth2/token") {
-            body = FormDataContent(
-                Parameters.build {
-                    append("grant_type", "refresh_token")
-                    append("client_id", clientId)
-                    append("client_secret", secret)
-                    append("refresh_token", user.monzoRefreshToken!!)
-                }
+        try {
+            val tokenRefresh = httpClient.post<TokenRefresh>("$baseUrl/oauth2/token") {
+                body = FormDataContent(
+                    Parameters.build {
+                        append("grant_type", "refresh_token")
+                        append("client_id", clientId)
+                        append("client_secret", secret)
+                        append("refresh_token", user.monzoRefreshToken!!)
+                    }
+                )
+            }
+            val updatedUser = user.copy(
+                monzoRefreshToken = tokenRefresh.refresh_token,
+                monzoToken = tokenRefresh.access_token
             )
+            userService.updateUser(updatedUser.id!!, updatedUser)
+        } catch (e: BadResponseStatusException) {
+            if (e.statusCode.value == 401) {
+                val updatedUser = user.copy(
+                    monzoToken = null
+                )
+                userService.updateUser(updatedUser.id!!, updatedUser)
+            }
+            throw e
         }
-
-        val updatedUser = user.copy(
-            monzoRefreshToken = tokenRefresh.refresh_token,
-            monzoToken = tokenRefresh.access_token
-        )
-        userService.updateUser(updatedUser.id!!, updatedUser)
     }
 
     suspend fun listAccounts(user: User): MonzoAccountList {
