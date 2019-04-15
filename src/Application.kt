@@ -42,8 +42,8 @@ fun Application.module(testing: Boolean = false) {
     val userService = UserService()
     val billService = BillService()
     val monzoService = MonzoApiService()
-    val schedulerService = SchedulerService()
-    schedulerService.init()
+//    val schedulerService = SchedulerService()
+//    schedulerService.init()
 
     install(ContentNegotiation) {
         jackson {
@@ -96,7 +96,7 @@ fun Routing.billRoutes(userService: UserService, billService: BillService) {
         get("/bills/due-for-deposit") {
             val userId = extractUserId(call)
             val user = userService.getUserById(userId)?: error("user with id $userId could not be found")
-            val bills = billService.getBillsDueForDeposit(DateTime(), user)
+            val bills = billService.getDueBills(user)
             call.respond(bills)
         }
     }
