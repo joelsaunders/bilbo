@@ -63,6 +63,7 @@ fun Application.module(testing: Boolean = false) {
     routing {
         this@routing.billRoutes(userService, billService)
         this@routing.userRoutes(userService, monzoService)
+        this@routing.schedulerRoutes(schedulerService)
 
         post("/login") {
             val post = call.receive<LoginRegister>()
@@ -87,6 +88,7 @@ fun Routing.schedulerRoutes(schedulerService: SchedulerService) {
 
         get("/scheduler/stop") {
             schedulerService.cancel()
+            call.respond("cancelled")
         }
     }
 }
