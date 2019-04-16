@@ -2,6 +2,7 @@ package com.bilbo.service
 
 import com.bilbo.model.*
 import io.ktor.util.KtorExperimentalAPI
+import kotlinx.coroutines.selects.select
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.joda.time.DateTime
@@ -24,7 +25,7 @@ class BillService {
         }.map { toBill(it) }
     }
 
-    fun getCurrentPeriodStart(now: DateTime, user: User): DateTime {
+    private fun getCurrentPeriodStart(now: DateTime, user: User): DateTime {
         return if (now.dayOfMonth.absoluteValue >= user.potDepositDay!!) {
             DateTime(
                 now.year,
@@ -44,7 +45,7 @@ class BillService {
         }
     }
 
-    fun calculatePaymentsThisPeriod(
+    private fun calculatePaymentsThisPeriod(
         periodStart: DateTime,
         periodEnd: DateTime,
         periodFrequency: Int,
@@ -68,49 +69,38 @@ class BillService {
         }
         return datesList
     }
-//
-//    /**
-//     * Fetch all monthly bills due for withdrawal
-//     *
-//     * Due for withdrawal means that the bill due day is today and there is no
-//     * withdrawal for that bill this month.
-//     *
-//     */
-//    suspend fun getMonthlyBillsDueForWithdrawal(now: DateTime, user: User): List<Bill> = DatabaseFactory.dbQuery {
-//        val billTable = Bills.alias("bills")
-//        val thisPeriodStart = getCurrentPeriodStart(now, user)
-//
-//        val billIdCol = billTable[Bills.id]
-//
-//        val ids = billTable.select {
-//            (
-//                    (Bills.dueDayOfMonth eq now.dayOfMonth.absoluteValue) and
-//                            (Bills.userId eq user.id!!) and
-//                            (notExists(
-//                                Withdrawals.select{
-//                                    (
-//                                            (Withdrawals.withdrawalDate greaterEq thisPeriodStart) and
-//                                                    (Withdrawals.billId eq billIdCol)
-//
-//                                            )
-//                                }
-//                            ))
-//                    )
-//        }.map { it[billIdCol] }
-//
-//        if (ids.isNotEmpty()) {
-//            Bills.select {
-//                (Bills.id inList ids)
-//            }.map { toBill(it) }
-//        } else listOf()
-//    }
 
     /**
      * a due date this period is in the past and has not yet been withdrawn
      */
-    suspend fun getDueWithdrawals(user: User) = DatabaseFactory.dbQuery {
+    suspend fun getDueWithdrawals(user: User): Map<Bill, List<DateTime>> = DatabaseFactory.dbQuery {
         val thisPeriodStart = getCurrentPeriodStart(DateTime(), user)
 
+        val bills = Bills.select {
+            (Bills.userId eq user.id!!)
+        }.map { toBill(it) }
+
+        val billsDatesMap = bills.map {
+            it to calculatePaymentsThisPeriod(
+                thisPeriodStart,
+                thisPeriodStart.plusMonths(1),
+                it.periodFrequency,
+                it.periodType,
+                it.startDate
+            )
+        }.filter {
+            it.second.count() > 0
+        }.toMap()
+
+        billsDatesMap.filter {
+            val dates = it.value
+            val bill = it.key
+            val lastPastDate = dates.filter { it1 -> it1.isBeforeNow }.sortedDescending().firstOrNull()
+
+            lastPastDate != null && Withdrawals.select {
+                (Withdrawals.billId eq bill.id) and (Withdrawals.withdrawalDate greaterEq lastPastDate)
+            }.count() == 0
+        }
     }
 
     /**Fetch all bills due for deposit

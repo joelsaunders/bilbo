@@ -42,7 +42,7 @@ fun Application.module(testing: Boolean = false) {
     val userService = UserService()
     val billService = BillService()
     val monzoService = MonzoApiService()
-//    val schedulerService = SchedulerService()
+    val schedulerService = SchedulerService()
 //    schedulerService.init()
 
     install(ContentNegotiation) {
@@ -78,6 +78,21 @@ fun Application.module(testing: Boolean = false) {
 }
 
 @KtorExperimentalAPI
+fun Routing.schedulerRoutes(schedulerService: SchedulerService) {
+    authenticate {
+        get("/scheduler/start") {
+            schedulerService.init()
+            call.respond("started")
+        }
+
+        get("/scheduler/stop") {
+            schedulerService.cancel()
+        }
+    }
+}
+
+
+@KtorExperimentalAPI
 fun Routing.billRoutes(userService: UserService, billService: BillService) {
     authenticate {
         get("/bills") {
@@ -97,6 +112,13 @@ fun Routing.billRoutes(userService: UserService, billService: BillService) {
             val userId = extractUserId(call)
             val user = userService.getUserById(userId)?: error("user with id $userId could not be found")
             val bills = billService.getDueBills(user)
+            call.respond(bills)
+        }
+
+        get("/bills/due-for-withdrawal") {
+            val userId = extractUserId(call)
+            val user = userService.getUserById(userId)?: error("user with id $userId could not be found")
+            val bills = billService.getDueWithdrawals(user)
             call.respond(bills)
         }
     }
