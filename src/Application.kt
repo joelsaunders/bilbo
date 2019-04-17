@@ -20,10 +20,12 @@ import io.ktor.request.receive
 import io.ktor.response.respond
 import io.ktor.routing.*
 import io.ktor.util.KtorExperimentalAPI
-import org.joda.time.DateTime
 import org.mindrot.jbcrypt.BCrypt
 import SimpleJWT
 import io.ktor.application.ApplicationCall
+import io.ktor.features.CORS
+import io.ktor.http.HttpHeaders
+import io.ktor.http.HttpMethod
 
 
 fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
@@ -44,6 +46,18 @@ fun Application.module(testing: Boolean = false) {
     val monzoService = MonzoApiService()
     val schedulerService = SchedulerService()
 //    schedulerService.init()
+
+    install(CORS) {
+        method(HttpMethod.Options)
+        method(HttpMethod.Get)
+        method(HttpMethod.Post)
+        method(HttpMethod.Put)
+        method(HttpMethod.Delete)
+        method(HttpMethod.Patch)
+        header(HttpHeaders.Authorization)
+        allowCredentials = true
+        anyHost()
+    }
 
     install(ContentNegotiation) {
         jackson {
@@ -128,6 +142,13 @@ fun Routing.billRoutes(userService: UserService, billService: BillService) {
 
 @KtorExperimentalAPI
 fun Routing.userRoutes(userService: UserService, monzoService: MonzoApiService) {
+
+    post("/user") {
+        val post = call.receive<User>()
+        val user = userService.createUser(post)?: error("user could not be created")
+        call.respond(user)
+    }
+
     authenticate {
         get("/user/accounts") {
             val userId = extractUserId(call)
@@ -151,12 +172,6 @@ fun Routing.userRoutes(userService: UserService, monzoService: MonzoApiService) 
             val userId = extractUserId(call)
             val post = call.receive<User>()
             val user = userService.updateUser(userId, post)?: error("user could not be updated")
-            call.respond(user)
-        }
-
-        post("/user") {
-            val post = call.receive<User>()
-            val user = userService.createUser(post)?: error("user could not be created")
             call.respond(user)
         }
 
