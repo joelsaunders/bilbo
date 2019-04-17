@@ -1,9 +1,9 @@
 package com.bilbo.service
 
 import com.bilbo.model.User
-import com.bilbo.service.DatabaseFactory.appConfig
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 import com.fasterxml.jackson.datatype.joda.JodaModule
+import com.typesafe.config.ConfigFactory
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO
 import io.ktor.client.features.BadResponseStatusException
@@ -11,6 +11,7 @@ import io.ktor.client.features.json.JacksonSerializer
 import io.ktor.client.features.json.JsonFeature
 import io.ktor.client.request.*
 import io.ktor.client.request.forms.FormDataContent
+import io.ktor.config.HoconApplicationConfig
 import io.ktor.http.Parameters
 import io.ktor.util.KtorExperimentalAPI
 import mu.KotlinLogging
@@ -60,6 +61,7 @@ data class TokenRefresh(
 
 @KtorExperimentalAPI
 class MonzoApiService {
+    val appConfig = HoconApplicationConfig(ConfigFactory.load())
     private val secret = appConfig.property("monzo.clientSecret").getString()
     private val clientId = appConfig.property("monzo.clientId").getString()
     private val baseUrl = appConfig.property("monzo.baseApiUrl").getString()
@@ -99,43 +101,51 @@ class MonzoApiService {
         userService.updateUser(updatedUser.id!!, updatedUser)
     }
 
-    private suspend fun <T>refreshTokenWrapper(user: User, request: suspend () -> T): T {
+    private suspend fun <T>refreshTokenWrapper(user: User, request: suspend (user: User) -> T): T {
         return try {
-            request()
+            request(user)
         } catch (e: BadResponseStatusException) {
             if (e.statusCode.value == 401) {
                 refreshToken(user)
                 val refreshedUser = userService.getUserById(user.id!!)
                 return refreshTokenWrapper(refreshedUser!!, request)
-            }
-            throw e
+            } else throw e
         }
     }
 
     suspend fun refreshToken(user: User) {
-        val tokenRefresh = httpClient.post<TokenRefresh>("$baseUrl/oauth2/token") {
-            body = FormDataContent(
-                Parameters.build {
-                    append("grant_type", "refresh_token")
-                    append("client_id", clientId)
-                    append("client_secret", secret)
-                    append("refresh_token", user.monzoRefreshToken!!)
-                }
+        try {
+            val tokenRefresh = httpClient.post<TokenRefresh>("$baseUrl/oauth2/token") {
+                body = FormDataContent(
+                    Parameters.build {
+                        append("grant_type", "refresh_token")
+                        append("client_id", clientId)
+                        append("client_secret", secret)
+                        append("refresh_token", user.monzoRefreshToken!!)
+                    }
+                )
+            }
+            val updatedUser = user.copy(
+                monzoRefreshToken = tokenRefresh.refresh_token,
+                monzoToken = tokenRefresh.access_token
             )
+            userService.updateUser(updatedUser.id!!, updatedUser)
+        } catch (e: BadResponseStatusException) {
+            if (e.statusCode.value == 401) {
+                val updatedUser = user.copy(
+                    monzoToken = null
+                )
+                userService.updateUser(updatedUser.id!!, updatedUser)
+            }
+            throw e
         }
-
-        val updatedUser = user.copy(
-            monzoRefreshToken = tokenRefresh.refresh_token,
-            monzoToken = tokenRefresh.access_token
-        )
-        userService.updateUser(updatedUser.id!!, updatedUser)
     }
 
     suspend fun listAccounts(user: User): MonzoAccountList {
         return refreshTokenWrapper(user){
             httpClient.get<MonzoAccountList>("$baseUrl/accounts") {
                 headers {
-                    append("Authorization", "Bearer ${user.monzoToken}")
+                    append("Authorization", "Bearer ${it.monzoToken}")
                 }
             }
         }
@@ -145,7 +155,7 @@ class MonzoApiService {
         return refreshTokenWrapper(user){
             httpClient.get<MonzoPotList>("$baseUrl/pots") {
                 headers {
-                    append("Authorization", "Bearer ${user.monzoToken}")
+                    append("Authorization", "Bearer ${it.monzoToken}")
                 }
             }
         }
@@ -170,7 +180,7 @@ class MonzoApiService {
                     }
                 )
                 headers {
-                    append("Authorization", "Bearer ${user.monzoToken}")
+                    append("Authorization", "Bearer ${it.monzoToken}")
                 }
             }
         }
@@ -191,7 +201,7 @@ class MonzoApiService {
                     }
                 )
                 headers {
-                    append("Authorization", "Bearer ${user.monzoToken}")
+                    append("Authorization", "Bearer ${it.monzoToken}")
                 }
             }
         }
@@ -212,7 +222,7 @@ class MonzoApiService {
                     }
                 )
                 headers {
-                    append("Authorization", "Bearer ${user.monzoToken}")
+                    append("Authorization", "Bearer ${it.monzoToken}")
                 }
             }
         }

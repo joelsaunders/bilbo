@@ -20,10 +20,12 @@ import io.ktor.request.receive
 import io.ktor.response.respond
 import io.ktor.routing.*
 import io.ktor.util.KtorExperimentalAPI
-import org.joda.time.DateTime
 import org.mindrot.jbcrypt.BCrypt
 import SimpleJWT
 import io.ktor.application.ApplicationCall
+import io.ktor.features.CORS
+import io.ktor.http.HttpHeaders
+import io.ktor.http.HttpMethod
 
 
 fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
@@ -43,7 +45,19 @@ fun Application.module(testing: Boolean = false) {
     val billService = BillService()
     val monzoService = MonzoApiService()
     val schedulerService = SchedulerService()
-    schedulerService.init()
+//    schedulerService.init()
+
+    install(CORS) {
+        method(HttpMethod.Options)
+        method(HttpMethod.Get)
+        method(HttpMethod.Post)
+        method(HttpMethod.Put)
+        method(HttpMethod.Delete)
+        method(HttpMethod.Patch)
+        header(HttpHeaders.Authorization)
+        allowCredentials = true
+        anyHost()
+    }
 
     install(ContentNegotiation) {
         jackson {
@@ -63,6 +77,7 @@ fun Application.module(testing: Boolean = false) {
     routing {
         this@routing.billRoutes(userService, billService)
         this@routing.userRoutes(userService, monzoService)
+        this@routing.schedulerRoutes(schedulerService)
 
         post("/login") {
             val post = call.receive<LoginRegister>()
@@ -76,6 +91,22 @@ fun Application.module(testing: Boolean = false) {
         }
     }
 }
+
+@KtorExperimentalAPI
+fun Routing.schedulerRoutes(schedulerService: SchedulerService) {
+    authenticate {
+        get("/scheduler/start") {
+            schedulerService.init()
+            call.respond("started")
+        }
+
+        get("/scheduler/stop") {
+            schedulerService.cancel()
+            call.respond("cancelled")
+        }
+    }
+}
+
 
 @KtorExperimentalAPI
 fun Routing.billRoutes(userService: UserService, billService: BillService) {
@@ -96,7 +127,14 @@ fun Routing.billRoutes(userService: UserService, billService: BillService) {
         get("/bills/due-for-deposit") {
             val userId = extractUserId(call)
             val user = userService.getUserById(userId)?: error("user with id $userId could not be found")
-            val bills = billService.getBillsDueForDeposit(DateTime(), user)
+            val bills = billService.getDueBills(user)
+            call.respond(bills)
+        }
+
+        get("/bills/due-for-withdrawal") {
+            val userId = extractUserId(call)
+            val user = userService.getUserById(userId)?: error("user with id $userId could not be found")
+            val bills = billService.getDueWithdrawals(user)
             call.respond(bills)
         }
     }
@@ -104,6 +142,13 @@ fun Routing.billRoutes(userService: UserService, billService: BillService) {
 
 @KtorExperimentalAPI
 fun Routing.userRoutes(userService: UserService, monzoService: MonzoApiService) {
+
+    post("/user") {
+        val post = call.receive<User>()
+        val user = userService.createUser(post)?: error("user could not be created")
+        call.respond(user)
+    }
+
     authenticate {
         get("/user/accounts") {
             val userId = extractUserId(call)
@@ -130,12 +175,6 @@ fun Routing.userRoutes(userService: UserService, monzoService: MonzoApiService) 
             call.respond(user)
         }
 
-        post("/user") {
-            val post = call.receive<User>()
-            val user = userService.createUser(post)?: error("user could not be created")
-            call.respond(user)
-        }
-
         /**
          * User must first go to:
          * https://auth.monzo.com/?client_id=$client_id&redirect_uri=$redirect_uri&response_type=code&state=$state_token
@@ -147,6 +186,13 @@ fun Routing.userRoutes(userService: UserService, monzoService: MonzoApiService) 
             val user = userService.getUserById(userId)?: error("user with id $userId could not be found")
             monzoService.oAuthLogin(code, user)
             call.respond("monzo login successful")
+        }
+
+        get("user/monzo-refresh") {
+            val userId = extractUserId(call)
+            val user = userService.getUserById(userId)?: error("user with id $userId could not be found")
+            val updatedUser = monzoService.refreshToken(user)
+            call.respond(updatedUser)
         }
     }
 }

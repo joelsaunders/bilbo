@@ -1,6 +1,7 @@
 package com.bilbo.service
 
 import com.bilbo.model.User
+import io.ktor.client.features.BadResponseStatusException
 import io.ktor.util.KtorExperimentalAPI
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
@@ -15,15 +16,14 @@ private val logger = KotlinLogging.logger {}
 
 @KtorExperimentalAPI
 suspend fun doDeposit(user: User) {
-    val billService = BillService()
     val depositService = DepositService()
     val monzoApi = MonzoApiService()
+    val billService = BillService()
 
-    val dueDeposits = billService.getBillsDueForDeposit(DateTime(), user)
+    val dueBills = billService.getDueBills(user)
+    val totalAmount = dueBills.map { it.key.amount * it.value.count() }.sum()
 
-    if (dueDeposits.count() == 0) return
-
-    val totalAmount = dueDeposits.sumBy { it.amount }
+    if (dueBills.count() == 0) return
 
     val monzoDeposit = MonzoDeposit(
         user.mainAccountId!!,
@@ -35,9 +35,9 @@ suspend fun doDeposit(user: User) {
     monzoApi.postFeedItem(
         user,
         "Bilbo's pot increased",
-        "\uD83D\uDC47 ${dueDeposits.count()} bills added"
+        "\uD83D\uDC47 ${dueBills.count()} bills added"
     )
-    dueDeposits.map { depositService.makeDeposit(it.id, it.amount) }
+    dueBills.map { depositService.makeDeposit(it.key.id, it.key.amount * it.value.count()) }
 }
 
 @KtorExperimentalAPI
@@ -46,20 +46,24 @@ suspend fun doWithdraw(user: User) {
     val withdrawalService = WithdrawalService()
     val monzoApi = MonzoApiService()
 
-    val dueWithdrawals = billService.getBillsDueForWithdrawal(DateTime(), user)
+    val dueWithdrawals = billService.getDueWithdrawals(user)
+    val totalAmount = dueWithdrawals.map { it.key.amount }.sum()
 
     if (dueWithdrawals.count() == 0) return
 
-    val totalAmount = dueWithdrawals.sumBy { it.amount }
-
     logger.debug { "Withdrawing ${dueWithdrawals.count()} bills" }
-    monzoApi.withdrawFromBilboPot(user, totalAmount)
-    monzoApi.postFeedItem(
-        user,
-        "Bilbo's pot decreased",
-        "\uD83D\uDC47 ${dueWithdrawals.count()} bills due today"
-    )
-    dueWithdrawals.map { withdrawalService.makeWithdrawal(it.id, true) }
+
+    try {
+        monzoApi.withdrawFromBilboPot(user, totalAmount)
+        monzoApi.postFeedItem(
+            user,
+            "Bilbo's pot decreased",
+            "\uD83D\uDC47 ${dueWithdrawals.count()} bills due today"
+        )
+        dueWithdrawals.map { withdrawalService.makeWithdrawal(it.key.id, true) }
+    } catch (e: Exception) {
+        dueWithdrawals.map { withdrawalService.makeWithdrawal(it.key.id, false) }
+    }
 }
 
 @KtorExperimentalAPI
@@ -81,12 +85,14 @@ fun makeDeposits() {
     }
 }
 
-
 class SchedulerService {
     private lateinit var timer: Timer
 
     @KtorExperimentalAPI
     fun init() {
+        if (this::timer.isInitialized) {
+            timer.cancel()
+        }
         timer = fixedRateTimer("task_scheduler", period = 1000*60.toLong()) {
             makeDeposits()
         }
