@@ -1,5 +1,7 @@
 package com.bilbo.service
 
+import com.bilbo.model.LoginCredentials
+import com.bilbo.model.NewUser
 import com.bilbo.model.User
 import com.bilbo.model.Users
 import com.bilbo.service.DatabaseFactory.dbQuery
@@ -11,10 +13,6 @@ import org.mindrot.jbcrypt.BCrypt
 @KtorExperimentalAPI
 class UserService {
 
-    suspend fun getAllUsers(): List<User> = dbQuery {
-        Users.selectAll().map { toUser(it) }
-    }
-
     suspend fun getReadyUsers(): List<User> = dbQuery {
         Users.select {
             Users.main_account_id.isNotNull() and
@@ -25,11 +23,16 @@ class UserService {
         }.mapNotNull { toUser(it) }
     }
 
-    suspend fun getUser(email: String): User? = dbQuery {
+    suspend fun getUserCredentials(email: String): LoginCredentials? = dbQuery {
         Users.select {
             (Users.email eq email)
-        }.mapNotNull { toUser(it) }
-            .singleOrNull()
+        }.mapNotNull {
+            LoginCredentials(
+                id = it[Users.id],
+                email = it[Users.email],
+                password = it[Users.password]
+            )
+        }.singleOrNull()
     }
 
     private fun _getUserById(id: Int): User? {
@@ -54,7 +57,7 @@ class UserService {
         _getUserById(id)
     }
 
-    suspend fun createUser(user: User): User? = dbQuery {
+    suspend fun createUser(user: NewUser): User? = dbQuery {
         val userId = Users.insert {
             it[email] = user.email
             it[password] = BCrypt.hashpw(
@@ -75,7 +78,6 @@ class UserService {
         User(
             id = row[Users.id],
             email = row[Users.email],
-            password = row[Users.password],
             monzoToken = row[Users.monzo_token],
             monzoRefreshToken = row[Users.monzo_refresh_token],
             mainAccountId = row[Users.main_account_id],

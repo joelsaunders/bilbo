@@ -62,8 +62,8 @@ data class TokenRefresh(
 @KtorExperimentalAPI
 class MonzoApiService {
     val appConfig = HoconApplicationConfig(ConfigFactory.load())
+    val clientId = appConfig.property("monzo.clientId").getString()
     private val secret = appConfig.property("monzo.clientSecret").getString()
-    private val clientId = appConfig.property("monzo.clientId").getString()
     private val baseUrl = appConfig.property("monzo.baseApiUrl").getString()
     private val userService = UserService()
 
@@ -98,7 +98,7 @@ class MonzoApiService {
             monzoRefreshToken = tokenResponse.refresh_token,
             monzoToken = tokenResponse.access_token
         )
-        userService.updateUser(updatedUser.id!!, updatedUser)
+        userService.updateUser(updatedUser.id, updatedUser)
     }
 
     private suspend fun <T>refreshTokenWrapper(user: User, request: suspend (user: User) -> T): T {
@@ -107,7 +107,7 @@ class MonzoApiService {
         } catch (e: BadResponseStatusException) {
             if (e.statusCode.value == 401) {
                 refreshToken(user)
-                val refreshedUser = userService.getUserById(user.id!!)
+                val refreshedUser = userService.getUserById(user.id)
                 return refreshTokenWrapper(refreshedUser!!, request)
             } else throw e
         }
@@ -129,13 +129,13 @@ class MonzoApiService {
                 monzoRefreshToken = tokenRefresh.refresh_token,
                 monzoToken = tokenRefresh.access_token
             )
-            userService.updateUser(updatedUser.id!!, updatedUser)
+            userService.updateUser(updatedUser.id, updatedUser)
         } catch (e: BadResponseStatusException) {
             if (e.statusCode.value == 401) {
                 val updatedUser = user.copy(
                     monzoToken = null
                 )
-                userService.updateUser(updatedUser.id!!, updatedUser)
+                userService.updateUser(updatedUser.id, updatedUser)
             }
             throw e
         }

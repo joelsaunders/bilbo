@@ -93,7 +93,7 @@ class SchedulerService {
         if (this::timer.isInitialized) {
             timer.cancel()
         }
-        timer = fixedRateTimer("task_scheduler", period = 1000*60.toLong()) {
+        timer = fixedRateTimer("task_scheduler", period = 1000*60*2.toLong()) {
             makeDeposits()
         }
     }

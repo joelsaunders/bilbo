@@ -15,8 +15,23 @@ object Users: Table() {
     val pot_deposit_day: Column<Int?> = integer("pot_deposit_day").nullable()
 }
 
+data class LoginCredentials(
+    val id: Int,
+    val email: String,
+    val password: String
+)
+
 data class User(
-    val id: Int?,
+    val id: Int,
+    val email: String,
+    val monzoToken: String?,
+    val monzoRefreshToken: String?,
+    val mainAccountId: String?,
+    val bilboPotId: String?,
+    val potDepositDay: Int?
+)
+
+data class NewUser(
     val email: String,
     val password: String,
     val monzoToken: String?,

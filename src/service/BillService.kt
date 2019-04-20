@@ -54,7 +54,7 @@ class BillService {
     ): List<DateTime> {
 
         var current: DateTime = paymentStart
-        var datesList = mutableListOf<DateTime>()
+        val datesList = mutableListOf<DateTime>()
 
         while (current < periodEnd) {
             if (current > periodStart && current < periodEnd) {
@@ -77,7 +77,7 @@ class BillService {
         val thisPeriodStart = getCurrentPeriodStart(DateTime(), user)
 
         val bills = Bills.select {
-            (Bills.userId eq user.id!!)
+            (Bills.userId eq user.id)
         }.map { toBill(it) }
 
         val billsDatesMap = bills.map {
@@ -118,7 +118,7 @@ class BillService {
             billTable.select {
                 (
                     (Bills.startDate less thisPeriodStart.plusMonths(1)) and
-                            (Bills.userId eq user.id!!) and
+                            (Bills.userId eq user.id) and
                             (notExists(
                                 Deposits.select{
                                     (
