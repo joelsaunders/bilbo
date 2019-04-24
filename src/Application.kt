@@ -170,9 +170,9 @@ fun Routing.userRoutes(userService: UserService, monzoService: MonzoApiService, 
      * get the access code and then come to this endpoint with the access code
      */
     get("/user/monzo-login") {
-        val userId = call.request.queryParameters["user_id"]?.toInt()!!
+        val state = call.request.queryParameters["state"]!!
         val code: String = call.request.queryParameters["code"] ?: error("code is required")
-        val user = userService.getUserById(userId)?: error("user with id $userId could not be found")
+        val user = userService.getUserByState(state)?: error("user with state $state could not be found")
         monzoService.oAuthLogin(code, user)
         call.respond("you are logged in!")
     }
@@ -207,12 +207,14 @@ fun Routing.userRoutes(userService: UserService, monzoService: MonzoApiService, 
 
         get("/user/get-monzo-login-url") {
             val userId = extractUserId(call)
-            userService.getUserById(userId)?: error("user with id $userId could not be found")
-            val redirectUri = "$rootUrl/user/monzo-login?user_id=$userId"
+            val user = userService.getUserById(userId)?: error("user with id $userId could not be found")
+            val updatedUser = user.copy(monzoState = UUID.randomUUID().toString())
+            userService.updateUser(userId, updatedUser)
+            val redirectUri = "$rootUrl/user/monzo-login"
             val loginUrl = "https://auth.monzo.com/?response_type=code&" +
                     "client_id=${monzoService.clientId}&" +
                     "redirect_uri=$redirectUri&" +
-                    "state=${UUID.randomUUID()}"
+                    "state=${updatedUser.monzoState}"
             call.respond(
                 mapOf("url" to loginUrl)
             )

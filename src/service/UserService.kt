@@ -46,10 +46,18 @@ class UserService {
         _getUserById(id)
     }
 
+    suspend fun getUserByState(state: String): User? = dbQuery {
+        Users.select {
+            (Users.monzo_state eq state)
+        }.mapNotNull { toUser(it) }
+            .singleOrNull()
+    }
+
     suspend fun updateUser(id: Int, updatedUser: User): User? = dbQuery {
         Users.update({Users.id eq id}) {
             it[monzo_token] = updatedUser.monzoToken
             it[monzo_refresh_token] = updatedUser.monzoRefreshToken
+            it[monzo_state] = updatedUser.monzoState
             it[main_account_id] = updatedUser.mainAccountId
             it[bilbo_pot_id] = updatedUser.bilboPotId
             it[pot_deposit_day] = updatedUser.potDepositDay
@@ -80,6 +88,7 @@ class UserService {
             email = row[Users.email],
             monzoToken = row[Users.monzo_token],
             monzoRefreshToken = row[Users.monzo_refresh_token],
+            monzoState = row[Users.monzo_state],
             mainAccountId = row[Users.main_account_id],
             bilboPotId = row[Users.bilbo_pot_id],
             potDepositDay = row[Users.pot_deposit_day]

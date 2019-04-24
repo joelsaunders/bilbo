@@ -89,7 +89,7 @@ class MonzoApiService {
                     append("grant_type", "authorization_code")
                     append("client_id", clientId)
                     append("client_secret", secret)
-                    append("redirect_uri", "https://www.thebookofjoel.com")
+                    append("redirect_uri", "https://bilbo.thebookofjoel.com/user/monzo-login")
                     append("code", accessCode)
                 }
             )
