@@ -28,8 +28,6 @@ import io.ktor.features.CORS
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpMethod
 import io.ktor.http.HttpStatusCode
-import io.ktor.response.respondRedirect
-import sun.font.TrueTypeFont
 import java.util.*
 
 
@@ -210,9 +208,8 @@ fun Routing.userRoutes(userService: UserService, monzoService: MonzoApiService, 
         get("/user/get-monzo-login-url") {
             val userId = extractUserId(call)
             userService.getUserById(userId)?: error("user with id $userId could not be found")
-            val redirectUri = "$rootUrl/user/$userId/monzo-login"
+            val redirectUri = "$rootUrl/user/monzo-login?user_id=$userId"
             val loginUrl = "https://auth.monzo.com/?response_type=code&" +
-                    "user_id=$userId&" +
                     "client_id=${monzoService.clientId}&" +
                     "redirect_uri=$redirectUri&" +
                     "state=${UUID.randomUUID()}"
