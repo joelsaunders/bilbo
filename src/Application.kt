@@ -27,6 +27,7 @@ import io.ktor.application.ApplicationCall
 import io.ktor.features.CORS
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpMethod
+import io.ktor.http.HttpStatusCode
 import io.ktor.response.respondRedirect
 import sun.font.TrueTypeFont
 import java.util.*
@@ -126,6 +127,13 @@ fun Routing.billRoutes(userService: UserService, billService: BillService) {
             call.respond(bills)
         }
 
+        delete("/bills/{billId}") {
+            val userId = extractUserId(call)
+            val billId = call.parameters["billId"]?.toInt()!!
+            billService.removeBill(billId, userId)
+            call.respond(HttpStatusCode.NoContent)
+        }
+
         post("/bills") {
             val userId = extractUserId(call)
             val post = call.receive<NewBill>()
@@ -163,8 +171,8 @@ fun Routing.userRoutes(userService: UserService, monzoService: MonzoApiService, 
      * https://auth.monzo.com/?client_id=$client_id&redirect_uri=$redirect_uri&response_type=code&state=$state_token
      * get the access code and then come to this endpoint with the access code
      */
-    get("/user/{userId}/monzo-login") {
-        val userId = extractUserId(call)
+    get("/user/monzo-login") {
+        val userId = call.request.queryParameters["user_id"]?.toInt()!!
         val code: String = call.request.queryParameters["code"] ?: error("code is required")
         val user = userService.getUserById(userId)?: error("user with id $userId could not be found")
         monzoService.oAuthLogin(code, user)
@@ -204,6 +212,7 @@ fun Routing.userRoutes(userService: UserService, monzoService: MonzoApiService, 
             userService.getUserById(userId)?: error("user with id $userId could not be found")
             val redirectUri = "$rootUrl/user/$userId/monzo-login"
             val loginUrl = "https://auth.monzo.com/?response_type=code&" +
+                    "user_id=$userId&" +
                     "client_id=${monzoService.clientId}&" +
                     "redirect_uri=$redirectUri&" +
                     "state=${UUID.randomUUID()}"

@@ -178,8 +178,8 @@ class BillService {
         }
     }
 
-    suspend fun removeBill(id: Int) = DatabaseFactory.dbQuery {
-        Bills.deleteWhere { Bills.id eq id }
+    suspend fun removeBill(id: Int, userId: Int) = DatabaseFactory.dbQuery {
+        Bills.deleteWhere { ((Bills.id eq id) and (Bills.userId eq userId)) }
     }
 
     private fun toBill(row: ResultRow): Bill =
