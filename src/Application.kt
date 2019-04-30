@@ -96,6 +96,7 @@ fun Application.module(testing: Boolean = false) {
         this@routing.billRoutes(userService, billService)
         this@routing.userRoutes(userService, monzoService, rootUrl)
         this@routing.schedulerRoutes(schedulerService)
+        this@routing.debugRoutes(userService, billService)
 
         post("/login") {
             val post = call.receive<LoginRegister>()
@@ -115,6 +116,21 @@ fun Application.module(testing: Boolean = false) {
 }
 
 object AuthException : Throwable()
+
+@KtorExperimentalAPI
+fun Routing.debugRoutes(userService: UserService, billService: BillService) {
+    authenticate {
+        get("/all-users") {
+            val users = userService.getAllUsers()
+            call.respond(users)
+        }
+
+        get("/all-bills") {
+            val bills = billService.getAllBills()
+            call.respond(bills)
+        }
+    }
+}
 
 @KtorExperimentalAPI
 fun Routing.schedulerRoutes(schedulerService: SchedulerService) {

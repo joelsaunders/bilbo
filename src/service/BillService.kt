@@ -12,6 +12,10 @@ import kotlin.math.absoluteValue
 @KtorExperimentalAPI
 class BillService {
 
+    suspend fun getAllBills(): List<Bill> = DatabaseFactory.dbQuery {
+        Bills.selectAll().map { toBill(it) }
+    }
+
     private fun getBillById(id: Int): Bill? {
         return Bills.select {
             (Bills.id eq id)

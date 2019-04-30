@@ -13,6 +13,10 @@ import org.mindrot.jbcrypt.BCrypt
 @KtorExperimentalAPI
 class UserService {
 
+    suspend fun getAllUsers(): List<User> = dbQuery {
+        Users.selectAll().mapNotNull { toUser(it) }
+    }
+
     suspend fun getReadyUsers(): List<User> = dbQuery {
         Users.select {
             Users.main_account_id.isNotNull() and
