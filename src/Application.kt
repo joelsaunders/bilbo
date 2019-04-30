@@ -1,12 +1,15 @@
 package com.bilbo
 
+import SimpleJWT
 import com.bilbo.model.LoginRegister
 import com.bilbo.model.NewBill
+import com.bilbo.model.NewUser
 import com.bilbo.model.User
 import com.bilbo.service.*
 import com.fasterxml.jackson.databind.SerializationFeature
 import com.fasterxml.jackson.datatype.joda.JodaModule
 import io.ktor.application.Application
+import io.ktor.application.ApplicationCall
 import io.ktor.application.call
 import io.ktor.application.install
 import io.ktor.auth.Authentication
@@ -14,20 +17,18 @@ import io.ktor.auth.UserIdPrincipal
 import io.ktor.auth.authenticate
 import io.ktor.auth.jwt.jwt
 import io.ktor.auth.principal
+import io.ktor.features.CORS
 import io.ktor.features.ContentNegotiation
+import io.ktor.features.StatusPages
+import io.ktor.http.HttpHeaders
+import io.ktor.http.HttpMethod
+import io.ktor.http.HttpStatusCode
 import io.ktor.jackson.jackson
 import io.ktor.request.receive
 import io.ktor.response.respond
 import io.ktor.routing.*
 import io.ktor.util.KtorExperimentalAPI
 import org.mindrot.jbcrypt.BCrypt
-import SimpleJWT
-import com.bilbo.model.NewUser
-import io.ktor.application.ApplicationCall
-import io.ktor.features.CORS
-import io.ktor.http.HttpHeaders
-import io.ktor.http.HttpMethod
-import io.ktor.http.HttpStatusCode
 import java.util.*
 
 
@@ -67,6 +68,7 @@ fun Application.module(testing: Boolean = false) {
         jackson {
             enable(SerializationFeature.INDENT_OUTPUT)
             registerModule(JodaModule())
+//            dateFormat = DateFormat.getDateInstance()
         }
     }
     install(Authentication) {
@@ -78,6 +80,18 @@ fun Application.module(testing: Boolean = false) {
         }
     }
 
+    install(StatusPages) {
+        exception<Throwable> { cause ->
+            call.respond(HttpStatusCode.InternalServerError)
+            throw cause
+        }
+
+        exception<AuthException> { cause ->
+            call.respond(HttpStatusCode.Unauthorized)
+        }
+    }
+
+
     routing {
         this@routing.billRoutes(userService, billService)
         this@routing.userRoutes(userService, monzoService, rootUrl)
@@ -88,7 +102,7 @@ fun Application.module(testing: Boolean = false) {
 
             val credentials = userService.getUserCredentials(post.email)
             if (credentials == null || !BCrypt.checkpw(post.password, credentials.password)) {
-                throw Error("Invalid Credentials")
+                throw AuthException
             }
 
             call.respond(
@@ -99,6 +113,8 @@ fun Application.module(testing: Boolean = false) {
         }
     }
 }
+
+object AuthException : Throwable()
 
 @KtorExperimentalAPI
 fun Routing.schedulerRoutes(schedulerService: SchedulerService) {

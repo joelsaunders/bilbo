@@ -14,6 +14,8 @@ object Users: Table() {
     val main_account_id: Column<String?> = varchar("main_account_id", 200).nullable()
     val bilbo_pot_id: Column<String?> = varchar("bilbo_pot_id", 200).nullable()
     val pot_deposit_day: Column<Int?> = integer("pot_deposit_day").nullable()
+    val active: Column<Boolean> = bool("active")
+    val whitelisted: Column<Boolean> = bool("whitelisted")
 }
 
 data class LoginCredentials(
@@ -30,7 +32,9 @@ data class User(
     val monzoState: String?,
     val mainAccountId: String?,
     val bilboPotId: String?,
-    val potDepositDay: Int?
+    val potDepositDay: Int?,
+    val active: Boolean,
+    val whitelisted: Boolean
 )
 
 data class NewUser(
