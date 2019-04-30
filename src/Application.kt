@@ -125,8 +125,23 @@ fun Routing.debugRoutes(userService: UserService, billService: BillService) {
             call.respond(users)
         }
 
-        get("/all-bills") {
-            val bills = billService.getAllBills()
+        get("/all-bills/{userId}") {
+            val userId = call.parameters["userId"]?.toInt()!!
+            val bills = billService.getAllBills(userId)
+            call.respond(bills)
+        }
+
+        get("/all-due-bills/{userId}") {
+            val userId = call.parameters["userId"]?.toInt()!!
+            val user = userService.getUserById(userId)?: error("no user with that id")
+            val bills = billService.getDueBills(user)
+            call.respond(bills)
+        }
+
+        get("/all-due-withdrawals/{userId}") {
+            val userId = call.parameters["userId"]?.toInt()!!
+            val user = userService.getUserById(userId)?: error("no user with that id")
+            val bills = billService.getDueWithdrawals(user)
             call.respond(bills)
         }
     }
