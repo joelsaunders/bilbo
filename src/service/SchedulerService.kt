@@ -1,12 +1,10 @@
 package com.bilbo.service
 
 import com.bilbo.model.User
-import io.ktor.client.features.BadResponseStatusException
 import io.ktor.util.KtorExperimentalAPI
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
 import mu.KotlinLogging
-import org.joda.time.DateTime
 import java.util.*
 import kotlin.concurrent.fixedRateTimer
 
@@ -20,7 +18,7 @@ suspend fun doDeposit(user: User) {
     val monzoApi = MonzoApiService()
     val billService = BillService()
 
-    val dueBills = billService.getDueBills(user)
+    val dueBills = billService.getDueDeposits(user)
     val totalAmount = dueBills.map { it.key.amount * it.value.count() }.sum()
 
     if (dueBills.count() == 0) return
@@ -47,7 +45,7 @@ suspend fun doWithdraw(user: User) {
     val monzoApi = MonzoApiService()
 
     val dueWithdrawals = billService.getDueWithdrawals(user)
-    val totalAmount = dueWithdrawals.map { it.key.amount }.sum()
+    val totalAmount = dueWithdrawals.map { it.amount }.sum()
 
     if (dueWithdrawals.count() == 0) return
 
@@ -60,19 +58,19 @@ suspend fun doWithdraw(user: User) {
             "Bilbo's pot decreased",
             "\uD83D\uDC47 ${dueWithdrawals.count()} bills due today"
         )
-        dueWithdrawals.map { withdrawalService.makeWithdrawal(it.key.id, true) }
+        dueWithdrawals.map { withdrawalService.makeWithdrawal(it.id, true) }
     } catch (e: Exception) {
-        dueWithdrawals.map { withdrawalService.makeWithdrawal(it.key.id, false) }
+        dueWithdrawals.map { withdrawalService.makeWithdrawal(it.id, false) }
     }
 }
 
 @KtorExperimentalAPI
-fun makeDeposits() {
+fun launchActions() {
     val userService = UserService()
 
     GlobalScope.launch {
         val users = userService.getReadyUsers()
-        logger.debug { "${users.count()} users found" }
+        logger.info { "${users.count()} fully set up users found" }
 
         for (user in users) {
             GlobalScope.launch {
@@ -94,7 +92,7 @@ class SchedulerService {
             timer.cancel()
         }
         timer = fixedRateTimer("task_scheduler", period = 1000*60*2.toLong()) {
-            makeDeposits()
+            launchActions()
         }
     }
 

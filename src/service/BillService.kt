@@ -9,6 +9,10 @@ import org.joda.time.DateTime
 import java.lang.IllegalArgumentException
 import kotlin.math.absoluteValue
 
+
+object BillServiceError: Throwable()
+
+
 @KtorExperimentalAPI
 class BillService {
 
@@ -74,37 +78,61 @@ class BillService {
         return datesList
     }
 
-    /**
-     * a due date this period is in the past and has not yet been withdrawn
+    /** Calculate if a bill is currently due for withdrawal
+     *
+     * Currently due for withdrawal means that the next due payment date this period is within 1 hour
+     * and before now.
+     *
      */
-    suspend fun getDueWithdrawals(user: User): Map<Bill, List<DateTime>> = DatabaseFactory.dbQuery {
+    private fun currentlyDueWithdrawal(bill: Bill, now: DateTime, user: User): DateTime? {
         val thisPeriodStart = getCurrentPeriodStart(DateTime(), user)
+        val thisPeriodEnd = thisPeriodStart.plusMonths(1)
 
+        val paymentsThisPeriod = calculatePaymentsThisPeriod(
+            thisPeriodStart,
+            thisPeriodEnd,
+            bill.periodFrequency,
+            bill.periodType,
+            bill.startDate
+        )
+
+        return paymentsThisPeriod.firstOrNull {
+            it.minusHours(1).isBefore(now) &&
+            it.isAfter(now)
+        }
+    }
+
+
+    /**Fetch all bills due for withdrawal
+     *
+     * A bill due for withdrawal has a due date within 1 hour and has not already got a withdrawal
+     * entry within the last 2 hours
+     */
+    suspend fun getDueWithdrawals(user: User): List<Bill> = DatabaseFactory.dbQuery {
+
+        // get all bills
         val bills = Bills.select {
             (Bills.userId eq user.id)
         }.map { toBill(it) }
 
-        val billsDatesMap = bills.map {
-            it to calculatePaymentsThisPeriod(
-                thisPeriodStart,
-                thisPeriodStart.plusMonths(1),
-                it.periodFrequency,
-                it.periodType,
-                it.startDate
+        // for each bill, check if there is a currently due withdrawal
+        bills.map {
+            it to currentlyDueWithdrawal(
+                it,
+                DateTime(),
+                user
             )
         }.filter {
-            it.second.count() > 0
-        }.toMap()
+            // return any bill where there is currently a withdrawal due and there has not been
+            // a withdrawal in the last 2 hours
+            val bill = it.first
+            val dueDate = it.second
 
-        billsDatesMap.filter {
-            val dates = it.value
-            val bill = it.key
-            val lastPastDate = dates.filter { it1 -> it1.isBeforeNow }.sortedDescending().firstOrNull()
-
-            lastPastDate != null && Withdrawals.select {
-                (Withdrawals.billId eq bill.id) and (Withdrawals.withdrawalDate greaterEq lastPastDate)
+            dueDate != null && Withdrawals.select {
+                (Withdrawals.billId eq bill.id) and
+                (Withdrawals.withdrawalDate greaterEq DateTime().minusHours(2))
             }.count() == 0
-        }
+        }.map { it.first }
     }
 
     /**Fetch all bills due for deposit
@@ -112,12 +140,14 @@ class BillService {
      * due for deposit means that the bill is due to be paid at least once this pay period and has not
      * yet been deposited.
      */
-    suspend fun getDueBills(user: User): Map<Bill, List<DateTime>> = DatabaseFactory.dbQuery {
+    suspend fun getDueDeposits(user: User): Map<Bill, List<DateTime>> = DatabaseFactory.dbQuery {
         val thisPeriodStart = getCurrentPeriodStart(DateTime(), user)
 
         val billTable = Bills.alias("bills")
         val billId = billTable[Bills.id]
 
+        // Fetch all bills where the start date is in the past and there is no deposit for the bill
+        // so far since the start of this period.
         val bills = transaction {
             billTable.select {
                 (
@@ -145,6 +175,8 @@ class BillService {
             }
         }
 
+        // map the bills to the payments that are due this period in the future so we can get a total amount
+        // needed to be deposited
         bills.map {
             it to calculatePaymentsThisPeriod(
                 thisPeriodStart,
@@ -152,13 +184,18 @@ class BillService {
                 it.periodFrequency,
                 it.periodType,
                 it.startDate
-            )
+            ).filter { dateTime -> dateTime.isAfter(DateTime()) }
         }.filter { it.second.count() > 0 }.toMap()
     }
 
-    suspend fun addBill(bill: NewBill, userId: Int): Bill? = DatabaseFactory.dbQuery {
+    /**Add a new bill item
+     *
+     * If the bill's next due date this period is in the past, then also create a deposit and
+     * withdrawal for it (without calling monzo) to stop them actually being made by the scheduler.
+     */
+    suspend fun addBill(bill: NewBill, user: User): Bill = DatabaseFactory.dbQuery {
         val billId = Bills.insert {
-            it[Bills.userId] = userId
+            it[userId] = user.id
             it[name] = bill.name
             it[amount] = bill.amount
             it[periodType] = bill.periodType
@@ -167,8 +204,8 @@ class BillService {
         } get Bills.id
 
         if (billId != null) {
-            getBillById(billId)
-        } else null
+            getBillById(billId)!!
+        } else throw BillServiceError
     }
 
     suspend fun updateBill(bill: Bill) = DatabaseFactory.dbQuery {

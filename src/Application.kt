@@ -50,7 +50,7 @@ fun Application.module(testing: Boolean = false) {
     val billService = BillService()
     val monzoService = MonzoApiService()
     val schedulerService = SchedulerService()
-//    schedulerService.init()
+    schedulerService.init()
 
     install(CORS) {
         method(HttpMethod.Options)
@@ -134,7 +134,7 @@ fun Routing.debugRoutes(userService: UserService, billService: BillService) {
         get("/all-due-bills/{userId}") {
             val userId = call.parameters["userId"]?.toInt()!!
             val user = userService.getUserById(userId)?: error("no user with that id")
-            val bills = billService.getDueBills(user)
+            val bills = billService.getDueDeposits(user)
             call.respond(bills)
         }
 
@@ -181,15 +181,16 @@ fun Routing.billRoutes(userService: UserService, billService: BillService) {
 
         post("/bills") {
             val userId = extractUserId(call)
+            val user = userService.getUserById(userId)?: error("user with id $userId could not be found")
             val post = call.receive<NewBill>()
-            val bill = billService.addBill(post, userId)?: error("bill could not be created")
+            val bill = billService.addBill(post, user)
             call.respond(bill)
         }
 
         get("/bills/due-for-deposit") {
             val userId = extractUserId(call)
             val user = userService.getUserById(userId)?: error("user with id $userId could not be found")
-            val bills = billService.getDueBills(user)
+            val bills = billService.getDueDeposits(user)
             call.respond(bills)
         }
 
