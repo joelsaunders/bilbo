@@ -2,7 +2,6 @@ package com.bilbo.service
 
 import com.bilbo.model.*
 import io.ktor.util.KtorExperimentalAPI
-import kotlinx.coroutines.selects.select
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.joda.time.DateTime
@@ -80,8 +79,7 @@ class BillService {
 
     /** Calculate if a bill is currently due for withdrawal
      *
-     * Currently due for withdrawal means that the next due payment date this period is within 1 hour
-     * and before now.
+     * A bill is due for withdrawal if there is no withdrawal record for the latest passed withdrawal date
      *
      */
     private fun currentlyDueWithdrawal(bill: Bill, now: DateTime, user: User): DateTime? {
@@ -96,10 +94,16 @@ class BillService {
             bill.startDate
         )
 
-        return paymentsThisPeriod.firstOrNull {
-            it.minusHours(1).isBefore(now) &&
-            it.isAfter(now)
-        }
+        val lastPassedWithdrawalDate = paymentsThisPeriod.lastOrNull {
+            it.isBefore(now)
+        } ?: return null
+
+        val noWithdrawal = Withdrawals.select {
+            (Withdrawals.billId eq bill.id) and
+            (Withdrawals.withdrawalDate greaterEq lastPassedWithdrawalDate)
+        }.count() == 0
+
+        return if (noWithdrawal) lastPassedWithdrawalDate else null
     }
 
 
@@ -122,17 +126,7 @@ class BillService {
                 DateTime(),
                 user
             )
-        }.filter {
-            // return any bill where there is currently a withdrawal due and there has not been
-            // a withdrawal in the last 2 hours
-            val bill = it.first
-            val dueDate = it.second
-
-            dueDate != null && Withdrawals.select {
-                (Withdrawals.billId eq bill.id) and
-                (Withdrawals.withdrawalDate greaterEq DateTime().minusHours(2))
-            }.count() == 0
-        }.map { it.first }
+        }.filter{ it.second != null }.map { it.first }
     }
 
     /**Fetch all bills due for deposit
@@ -188,24 +182,36 @@ class BillService {
         }.filter { it.second.count() > 0 }.toMap()
     }
 
-    /**Add a new bill item
+    /**Add a new newBill item
      *
-     * If the bill's next due date this period is in the past, then also create a deposit and
-     * withdrawal for it (without calling monzo) to stop them actually being made by the scheduler.
+     * If the newBill's next due date this period is in the past, then also a
+     * withdrawal for it (without calling monzo) to stop one actually being made by the scheduler.
      */
-    suspend fun addBill(bill: NewBill, user: User): Bill = DatabaseFactory.dbQuery {
+    suspend fun addBill(newBill: NewBill, user: User): Bill = DatabaseFactory.dbQuery {
         val billId = Bills.insert {
             it[userId] = user.id
-            it[name] = bill.name
-            it[amount] = bill.amount
-            it[periodType] = bill.periodType
-            it[periodFrequency] = bill.periodFrequency
-            it[startDate] = bill.startDate
+            it[name] = newBill.name
+            it[amount] = newBill.amount
+            it[periodType] = newBill.periodType
+            it[periodFrequency] = newBill.periodFrequency
+            it[startDate] = newBill.startDate
         } get Bills.id
 
-        if (billId != null) {
-            getBillById(billId)!!
+        val bill = if (billId != null) {
+            getBillById(billId)?: throw BillServiceError
         } else throw BillServiceError
+
+
+        // if there is a currently due withdrawal then make the record so that a real withdrawal is not made
+        currentlyDueWithdrawal(bill, DateTime(), user)?: return@dbQuery bill
+
+        Withdrawals.insert {
+            it[withdrawalDate] = DateTime()
+            it[success] = false
+            it[Withdrawals.billId] = bill.id
+        }
+
+        bill
     }
 
     suspend fun updateBill(bill: Bill) = DatabaseFactory.dbQuery {
