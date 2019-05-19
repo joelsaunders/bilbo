@@ -28,7 +28,9 @@ import io.ktor.request.receive
 import io.ktor.response.respond
 import io.ktor.routing.*
 import io.ktor.util.KtorExperimentalAPI
+import org.joda.time.DateTime
 import org.mindrot.jbcrypt.BCrypt
+import java.text.DateFormat
 import java.util.*
 
 
@@ -50,6 +52,7 @@ fun Application.module(testing: Boolean = false) {
     val billService = BillService()
     val monzoService = MonzoApiService()
     val schedulerService = SchedulerService()
+    val withdrawalService = WithdrawalService()
     schedulerService.init()
 
     install(CORS) {
@@ -68,7 +71,7 @@ fun Application.module(testing: Boolean = false) {
         jackson {
             enable(SerializationFeature.INDENT_OUTPUT)
             registerModule(JodaModule())
-//            dateFormat = DateFormat.getDateInstance()
+            dateFormat = DateFormat.getDateInstance()
         }
     }
     install(Authentication) {
@@ -97,6 +100,7 @@ fun Application.module(testing: Boolean = false) {
         this@routing.userRoutes(userService, monzoService, rootUrl)
         this@routing.schedulerRoutes(schedulerService)
         this@routing.debugRoutes(userService, billService)
+        this@routing.withdrawalRoutes(withdrawalService)
 
         post("/login") {
             val post = call.receive<LoginRegister>()
@@ -158,6 +162,23 @@ fun Routing.schedulerRoutes(schedulerService: SchedulerService) {
         get("/scheduler/stop") {
             schedulerService.cancel()
             call.respond("cancelled")
+        }
+    }
+}
+
+
+@KtorExperimentalAPI
+fun Routing.withdrawalRoutes(withdrawalService: WithdrawalService) {
+    authenticate {
+        get("/withdrawals") {
+            val userId = extractUserId(call)
+            val dateParam: String? = call.parameters["date"]
+            val withdrawals = if (dateParam != null) {
+                val date: DateTime = DateTime.parse(dateParam)
+                withdrawalService.getWithdrawals(userId, date)
+            } else withdrawalService.getWithdrawals(userId)
+
+            call.respond(withdrawals)
         }
     }
 }
