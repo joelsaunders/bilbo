@@ -101,20 +101,24 @@ class MonzoApiService {
         userService.updateUser(updatedUser.id, updatedUser)
     }
 
-    private suspend fun <T>refreshTokenWrapper(user: User, request: suspend (user: User) -> T): T {
+    private suspend fun <T> refreshTokenWrapper(user: User, request: suspend (user: User) -> T): T {
         return try {
-            request(user)
+            logger.info{ "Wrapper entered" }
+            val response = request(user)
+            logger.info{ "Wrapper exited" }
+            response
         } catch (e: BadResponseStatusException) {
             if (e.statusCode.value == 401) {
-                refreshToken(user)
-                val refreshedUser = userService.getUserById(user.id)
-                return refreshTokenWrapper(refreshedUser!!, request)
+                logger.info { "Monzo request failed with status 401 for user ${user.id}" }
+                val refreshedUser = refreshToken(user)
+                return refreshTokenWrapper(refreshedUser, request)
             } else throw e
         }
     }
 
-    suspend fun refreshToken(user: User) {
-        try {
+    suspend fun refreshToken(user: User): User {
+        return try {
+            logger.info { "Refreshing monzo token for user ${user.id}" }
             val tokenRefresh = httpClient.post<TokenRefresh>("$baseUrl/oauth2/token") {
                 body = FormDataContent(
                     Parameters.build {
@@ -129,9 +133,15 @@ class MonzoApiService {
                 monzoRefreshToken = tokenRefresh.refresh_token,
                 monzoToken = tokenRefresh.access_token
             )
-            userService.updateUser(updatedUser.id, updatedUser)
+            val savedUser = userService.updateUser(updatedUser.id, updatedUser)!!
+            logger.info {
+                "Token refresh successful for user ${user.id} new tokens:" +
+                        " ${savedUser.monzoToken}, ${savedUser.monzoRefreshToken}"
+            }
+            savedUser
         } catch (e: BadResponseStatusException) {
             if (e.statusCode.value == 401) {
+                logger.info { "Token refresh received 401 for user ${user.id}, setting monzo token to null" }
                 val updatedUser = user.copy(
                     monzoToken = null
                 )
@@ -142,7 +152,7 @@ class MonzoApiService {
     }
 
     suspend fun listAccounts(user: User): MonzoAccountList {
-        return refreshTokenWrapper(user){
+        return refreshTokenWrapper(user) {
             httpClient.get<MonzoAccountList>("$baseUrl/accounts") {
                 headers {
                     append("Authorization", "Bearer ${it.monzoToken}")
@@ -152,7 +162,7 @@ class MonzoApiService {
     }
 
     suspend fun listPots(user: User): MonzoPotList {
-        return refreshTokenWrapper(user){
+        return refreshTokenWrapper(user) {
             httpClient.get<MonzoPotList>("$baseUrl/pots") {
                 headers {
                     append("Authorization", "Bearer ${it.monzoToken}")
@@ -164,6 +174,7 @@ class MonzoApiService {
     suspend fun postFeedItem(user: User, title: String, postBody: String) {
         val requestUrl = "$baseUrl/feed"
 
+        logger.info { "Posting feed item for user ${user.id}" }
         refreshTokenWrapper(user) {
             httpClient.post<Unit> {
                 url(URL(requestUrl))
@@ -184,12 +195,13 @@ class MonzoApiService {
                 }
             }
         }
+        logger.info { "Finished posting feed item for user ${user.id}" }
     }
 
     suspend fun withdrawFromBilboPot(user: User, amount: Int) {
         val requestUrl = "$baseUrl/pots/${user.bilboPotId}/withdraw"
 
-        logger.debug { "posting withdrawal to $requestUrl with  amount: $amount" }
+        logger.info { "posting withdrawal for user ${user.id} to $requestUrl with  amount: $amount" }
         refreshTokenWrapper(user) {
             httpClient.put<Unit> {
                 url(URL(requestUrl))
@@ -205,12 +217,13 @@ class MonzoApiService {
                 }
             }
         }
+        logger.info { "Withdraw for user ${user.id} finished" }
     }
 
     suspend fun depositIntoBilboPot(user: User, deposit: MonzoDeposit) {
         val requestUrl = "$baseUrl/pots/${user.bilboPotId}/deposit"
 
-        logger.debug { "posting deposit to $requestUrl with $deposit" }
+        logger.debug { "posting deposit for user ${user.id} to $requestUrl with $deposit" }
         refreshTokenWrapper(user) {
             httpClient.put<Unit> {
                 url(URL(requestUrl))
@@ -226,5 +239,6 @@ class MonzoApiService {
                 }
             }
         }
+        logger.info { "Deposit for user ${user.id} finished" }
     }
 }
