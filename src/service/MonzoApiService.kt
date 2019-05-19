@@ -135,8 +135,9 @@ class MonzoApiService {
             )
             val savedUser = userService.updateUser(updatedUser.id, updatedUser)!!
             logger.info {
-                "Token refresh successful for user ${user.id} new tokens:" +
-                        " ${savedUser.monzoToken}, ${savedUser.monzoRefreshToken}"
+                "Token refresh successful for user ${user.id}" +
+                        " token ${savedUser.monzoToken}, ${tokenRefresh.access_token}" +
+                        " refresh token ${savedUser.monzoRefreshToken}, ${tokenRefresh.refresh_token}"
             }
             savedUser
         } catch (e: BadResponseStatusException) {
@@ -145,7 +146,8 @@ class MonzoApiService {
                 val updatedUser = user.copy(
                     monzoToken = null
                 )
-                userService.updateUser(updatedUser.id, updatedUser)
+                userService.updateUser(updatedUser.id, updatedUser)!!
+                throw UnsuccessfulTokenRefresh
             }
             throw e
         }
@@ -180,7 +182,7 @@ class MonzoApiService {
                 url(URL(requestUrl))
                 body = FormDataContent(
                     Parameters.build {
-                        append("account_id", user.mainAccountId!!)
+                        append("account_id", it.mainAccountId!!)
                         append("type", "basic")
                         append("params[title]", title)
                         append("params[body]", postBody)
@@ -207,7 +209,7 @@ class MonzoApiService {
                 url(URL(requestUrl))
                 body = FormDataContent(
                     Parameters.build {
-                        append("destination_account_id", user.mainAccountId!!)
+                        append("destination_account_id", it.mainAccountId!!)
                         append("amount", amount.toString())
                         append("dedupe_id", UUID.randomUUID().toString())
                     }
@@ -242,3 +244,5 @@ class MonzoApiService {
         logger.info { "Deposit for user ${user.id} finished" }
     }
 }
+
+object UnsuccessfulTokenRefresh : Throwable()
